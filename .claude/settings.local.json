@@ -7,7 +7,9 @@
       "Bash(pnpm install:*)",
       "Bash(mkdir:*)",
       "Bash(curl:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm start)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": [],
     "ask": []

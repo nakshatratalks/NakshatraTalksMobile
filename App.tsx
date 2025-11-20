@@ -1,13 +1,18 @@
 import React, { useState } from 'react';
 import WelcomeScreen from './screens/WelcomeScreen';
 import SignInScreen from './screens/SignInScreen';
+import HomeScreen from './screens/HomeScreen';
 
 export default function App() {
-  const [showSignIn, setShowSignIn] = useState(false);
+  const [currentScreen, setCurrentScreen] = useState('home'); // 'welcome', 'signIn', 'home'
 
-  if (showSignIn) {
-    return <SignInScreen />;
+  if (currentScreen === 'home') {
+    return <HomeScreen />;
   }
 
-  return <WelcomeScreen onGetStarted={() => setShowSignIn(true)} />;
+  if (currentScreen === 'signIn') {
+    return <SignInScreen onGetOtp={() => setCurrentScreen('home')} />;
+  }
+
+  return <WelcomeScreen onGetStarted={() => setCurrentScreen('signIn')} />;
 }

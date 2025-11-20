@@ -20,7 +20,11 @@ import { useResponsiveLayout } from '../src/utils/responsive';
 
 const BASE_WIDTH = 384;
 
-const SignInScreen = () => {
+type SignInScreenProps = {
+  onGetOtp?: () => void;
+};
+
+const SignInScreen = ({ onGetOtp }: SignInScreenProps) => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [fontsLoaded] = useFonts({
     Lexend_400Regular,
@@ -283,6 +287,7 @@ const SignInScreen = () => {
               },
             ]}
             activeOpacity={0.8}
+            onPress={onGetOtp}
           >
             <Text
               style={[
