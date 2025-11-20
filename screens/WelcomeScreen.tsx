@@ -1,34 +1,24 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  StyleSheet,
-  Dimensions,
-} from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
-import {
-  Lexend_400Regular,
-  Lexend_600SemiBold,
-} from '@expo-google-fonts/lexend';
-import {
-  OpenSans_700Bold,
-} from '@expo-google-fonts/open-sans';
+import { Lexend_400Regular, Lexend_600SemiBold } from '@expo-google-fonts/lexend';
+import { OpenSans_700Bold } from '@expo-google-fonts/open-sans';
+import { useResponsiveLayout } from '../src/utils/responsive';
 
-const WelcomeScreen = () => {
+type WelcomeScreenProps = {
+  onGetStarted?: () => void;
+};
+
+const WelcomeScreen = ({ onGetStarted }: WelcomeScreenProps) => {
   const [fontsLoaded] = useFonts({
     Lexend_400Regular,
     Lexend_600SemiBold,
     OpenSans_700Bold,
   });
 
-  const { width } = Dimensions.get('window');
-  const BASE_WIDTH = 384;
-  const cardWidth = Math.min(width - 24, BASE_WIDTH);
-  const scale = cardWidth / BASE_WIDTH;
+  const { cardWidth, scale } = useResponsiveLayout();
 
   if (!fontsLoaded) {
     return null;
@@ -126,6 +116,7 @@ const WelcomeScreen = () => {
               },
             ]}
             activeOpacity={0.8}
+            onPress={onGetStarted}
           >
             <Text
               style={[
