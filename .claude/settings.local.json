@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__figma-mcp__get_metadata",
+      "mcp__figma-mcp__get_screenshot",
+      "mcp__figma-mcp__get_design_context",
+      "Bash(pnpm install:*)",
+      "Bash(mkdir:*)",
+      "Bash(curl:*)",
+      "Bash(npm install:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
