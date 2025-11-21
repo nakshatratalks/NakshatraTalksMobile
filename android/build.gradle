@@ -12,12 +12,6 @@ buildscript {
   }
 }
 
-ext {
-  // React Native 0.81 uses C++20 features (std::format) that require NDK 27+.
-  // Keep everyone on the same NDK version so Gradle can auto-install it.
-  ndkVersion = "27.1.12297006"
-}
-
 allprojects {
   repositories {
     google()

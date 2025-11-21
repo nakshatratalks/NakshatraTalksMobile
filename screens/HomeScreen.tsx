@@ -53,7 +53,6 @@ import {
   AlertCircle,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { GestureHandlerRootView, PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useResponsiveLayout } from '../src/utils/responsive';
 import { useHomeData } from '../src/hooks/useHomeData';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -114,7 +113,7 @@ const topRatedAstrologers = [
   },
 ];
 
-const HomeScreen = () => {
+const HomeScreen = ({ navigation }: any) => {
   // API Data Hook
   const {
     userProfile,
@@ -142,9 +141,15 @@ const HomeScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
 
+  // Toast notification animation
+  const toastAnim = useRef(new Animated.Value(-100)).current;
+
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
+  const screenScale = useRef(new Animated.Value(1)).current;
+  const screenTranslateX = useRef(new Animated.Value(0)).current;
+  const contentOpacityAnim = useRef(new Animated.Value(1)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const searchBorderAnim = useRef(new Animated.Value(0)).current;
 
@@ -245,6 +250,74 @@ const HomeScreen = () => {
     }).start();
   };
 
+  // Toast notification animation
+  useEffect(() => {
+    if (submitSuccess) {
+      // Slide down from top
+      Animated.spring(toastAnim, {
+        toValue: 0,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      // Slide up out of view
+      Animated.timing(toastAnim, {
+        toValue: -100,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [submitSuccess]);
+
+  // 3D Sidebar animation effect with content fade
+  useEffect(() => {
+    const SIDEBAR_WIDTH = screenWidth * 0.75;
+    if (sidebarVisible) {
+      Animated.parallel([
+        Animated.timing(screenScale, {
+          toValue: 0.85,
+          duration: 350,
+          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(screenTranslateX, {
+          toValue: SIDEBAR_WIDTH * 0.8,
+          duration: 350,
+          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(contentOpacityAnim, {
+          toValue: 0.3,
+          duration: 350,
+          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(screenScale, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(screenTranslateX, {
+          toValue: 0,
+          duration: 300,
+          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(contentOpacityAnim, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [sidebarVisible]);
+
   // Form validation
   const validateForm = () => {
     const newErrors = { name: '', email: '', comments: '' };
@@ -323,50 +396,45 @@ const HomeScreen = () => {
     }
   };
 
-  // Handle swipe gesture for opening sidebar
-  const onGestureEvent = Animated.event(
-    [{ nativeEvent: { translationX: new Animated.Value(0) } }],
-    { useNativeDriver: false }
-  );
-
-  const onHandlerStateChange = (event: any) => {
-    if (event.nativeEvent.state === State.END) {
-      const { translationX, velocityX } = event.nativeEvent;
-      // Open sidebar if swipe right from left edge with sufficient distance or velocity
-      if (translationX > 50 || velocityX > 500) {
-        setSidebarVisible(true);
-      }
-    }
-  };
-
-  // Handle sidebar toggle
-  const toggleSidebar = () => {
-    setSidebarVisible(!sidebarVisible);
-  };
-
-  const closeSidebar = () => {
-    setSidebarVisible(false);
-  };
 
   if (!fontsLoaded) {
     return null;
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <>
+      <Animated.View style={[
+        styles.mainContainer,
+        {
+          transform: [
+            { scale: screenScale },
+            { translateX: screenTranslateX },
+          ],
+          opacity: contentOpacityAnim,
+          borderRadius: sidebarVisible ? 30 : 0,
+          overflow: 'hidden',
+        }
+      ]}>
       <SafeAreaView style={styles.safeArea}>
         <StatusBar style="dark" />
 
-        {/* Sidebar Component */}
-        <Sidebar visible={sidebarVisible} onClose={closeSidebar} />
+        {/* Toast Notification */}
+        {submitSuccess && (
+          <Animated.View
+            style={[
+              styles.toastNotification,
+              {
+                transform: [{ translateY: toastAnim }],
+              },
+            ]}
+          >
+            <CheckCircle size={22} color="#10B981" strokeWidth={2.5} />
+            <Text style={styles.toastText}>
+              Feedback submitted successfully!
+            </Text>
+          </Animated.View>
+        )}
 
-        <PanGestureHandler
-          onGestureEvent={onGestureEvent}
-          onHandlerStateChange={onHandlerStateChange}
-          activeOffsetX={[10, 100]}
-          failOffsetX={[-100, -10]}
-        >
-          <Animated.View style={{ flex: 1 }}>
             <Animated.ScrollView
         style={[styles.container, {
           opacity: fadeAnim,
@@ -390,7 +458,7 @@ const HomeScreen = () => {
         }]}>
           <TouchableOpacity
             style={styles.headerLeft}
-            onPress={toggleSidebar}
+            onPress={() => setSidebarVisible(true)}
             activeOpacity={0.7}
           >
             <View style={[styles.profileCircle, { width: 56 * scale, height: 56 * scale }]}>
@@ -636,20 +704,6 @@ const HomeScreen = () => {
             borderRadius: 12 * scale,
             padding: 25 * scale
           }]}>
-            {/* Success Message */}
-            {submitSuccess && (
-              <Animated.View style={[styles.successMessage, {
-                marginBottom: 20 * scale,
-                padding: 12 * scale,
-                borderRadius: 10 * scale
-              }]}>
-                <CheckCircle size={20 * scale} color="#10B981" />
-                <Text style={[styles.successText, { fontSize: 13 * scale }]}>
-                  Thank you! Your feedback has been submitted successfully.
-                </Text>
-              </Animated.View>
-            )}
-
             {/* Name Input */}
             <View style={[styles.inputGroup, { marginBottom: 16 * scale }]}>
               <Text style={[styles.inputLabel, { fontSize: 12 * scale, marginBottom: 6 * scale }]}>Name</Text>
@@ -820,10 +874,15 @@ const HomeScreen = () => {
           scale={scale}
         />
       </Animated.View>
-          </Animated.View>
-        </PanGestureHandler>
       </SafeAreaView>
-    </GestureHandlerRootView>
+      </Animated.View>
+
+      {/* Sidebar */}
+      <Sidebar
+        visible={sidebarVisible}
+        onClose={() => setSidebarVisible(false)}
+      />
+    </>
   );
 };
 
@@ -1152,6 +1211,10 @@ const CategoryIcon = ({ iconImage, label, scale }: any) => {
 };
 
 const styles = StyleSheet.create({
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#FFFFFF',
@@ -1516,20 +1579,33 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#E5E5E5',
   },
-  successMessage: {
-    backgroundColor: '#ECFDF5',
-    borderRadius: 10,
+  toastNotification: {
+    position: 'absolute',
+    top: 10,
+    left: 20,
+    right: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
+    zIndex: 1000,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
     borderWidth: 1,
     borderColor: '#10B981',
   },
-  successText: {
+  toastText: {
     fontFamily: 'Lexend_500Medium',
-    fontSize: 13,
+    fontSize: 14,
     color: '#059669',
     flex: 1,
+    letterSpacing: -0.2,
   },
   inputGroup: {
     width: '100%',

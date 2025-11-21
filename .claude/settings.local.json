@@ -15,7 +15,10 @@
       "Bash(npm run android:*)",
       "Bash(netstat:*)",
       "Bash(findstr:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(npx expo prebuild:*)",
+      "Bash(echo:*)",
+      "Bash(npm start -- --reset-cache)"
     ],
     "deny": [],
     "ask": []

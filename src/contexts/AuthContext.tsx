@@ -45,9 +45,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       if (authenticated) {
         // Get current user from API
-        const response = await authService.getCurrentUser();
-        setUser(response.user);
-        setIsAuthenticated(true);
+        try {
+          const response = await authService.getCurrentUser();
+          setUser(response.user);
+          setIsAuthenticated(true);
+        } catch (error: any) {
+          // If token is invalid or expired (401), clear it
+          if (error?.response?.status === 401) {
+            await authService.logout();
+          }
+          setUser(null);
+          setIsAuthenticated(false);
+        }
       } else {
         setUser(null);
         setIsAuthenticated(false);

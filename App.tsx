@@ -16,7 +16,7 @@ import WelcomeScreen from './screens/WelcomeScreen';
 import SignInScreen from './screens/SignInScreen';
 import HomeScreen from './screens/HomeScreen';
 
-// Create Stack Navigator
+// Create Navigator
 const Stack = createNativeStackNavigator();
 
 // Create React Query Client

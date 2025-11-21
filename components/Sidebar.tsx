@@ -10,25 +10,26 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { SvgProps } from 'react-native-svg';
 import { useFonts } from 'expo-font';
 import { Lexend_500Medium, Lexend_600SemiBold } from '@expo-google-fonts/lexend';
 import { Poppins_500Medium } from '@expo-google-fonts/poppins';
 import { useAuth } from '../src/contexts/AuthContext';
+import {
+  Home,
+  MessageSquare,
+  Phone,
+  Wallet,
+  Headphones,
+  Settings,
+  User,
+  LogOut,
+  X,
+} from 'lucide-react-native';
 
-// Import SVG icons from Figma design
-import HomeIcon from '../assets/icons/home.svg';
-import CallIcon from '../assets/icons/call.svg';
-import WalletIcon from '../assets/icons/wallet.svg';
-import ServiceHistoryIcon from '../assets/icons/service-history.svg';
-import SettingsIcon from '../assets/icons/settings.svg';
-import LogoutIcon from '../assets/icons/logout.svg';
-import CloseIcon from '../assets/icons/close.svg';
-import MessageStrokeIcon from '../assets/icons/message-stroke.svg';
-import UserRectangleIcon from '../assets/icons/user-rectangle.svg';
+// Import Nakshatra star pattern
 import DecorativeBg from '../assets/icons/decorative-bg.svg';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.75;
 
 interface SidebarProps {
@@ -46,6 +47,7 @@ interface MenuItem {
 const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
   const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
   const { logout } = useAuth();
 
   const [fontsLoaded] = useFonts({
@@ -56,30 +58,40 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
 
   useEffect(() => {
     if (visible) {
-      // Slide in animation
+      // Smooth slide in and fade in animation
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: 0,
-          duration: 300,
+          duration: 350,
           useNativeDriver: true,
         }),
         Animated.timing(overlayAnim, {
           toValue: 1,
-          duration: 300,
+          duration: 350,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 350,
           useNativeDriver: true,
         }),
       ]).start();
     } else {
-      // Slide out animation
+      // Smooth slide out and fade out animation
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: -SIDEBAR_WIDTH,
-          duration: 250,
+          duration: 300,
           useNativeDriver: true,
         }),
         Animated.timing(overlayAnim, {
           toValue: 0,
-          duration: 250,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 300,
           useNativeDriver: true,
         }),
       ]).start();
@@ -99,7 +111,7 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
     {
       id: 'home',
       label: 'Home',
-      icon: HomeIcon,
+      icon: Home,
       onPress: () => {
         console.log('Navigate to Home');
         onClose();
@@ -108,7 +120,7 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
     {
       id: 'chat',
       label: 'Chat with Astrologer',
-      icon: MessageStrokeIcon,
+      icon: MessageSquare,
       onPress: () => {
         console.log('Navigate to Chat');
         onClose();
@@ -117,7 +129,7 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
     {
       id: 'call',
       label: 'Call with Astrologer',
-      icon: CallIcon,
+      icon: Phone,
       onPress: () => {
         console.log('Navigate to Call');
         onClose();
@@ -126,7 +138,7 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
     {
       id: 'wallet',
       label: 'My wallet',
-      icon: WalletIcon,
+      icon: Wallet,
       onPress: () => {
         console.log('Navigate to Wallet');
         onClose();
@@ -135,7 +147,7 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
     {
       id: 'history',
       label: 'Service History',
-      icon: ServiceHistoryIcon,
+      icon: Headphones,
       onPress: () => {
         console.log('Navigate to Service History');
         onClose();
@@ -144,7 +156,7 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
     {
       id: 'settings',
       label: 'Settings',
-      icon: SettingsIcon,
+      icon: Settings,
       onPress: () => {
         console.log('Navigate to Settings');
         onClose();
@@ -153,7 +165,7 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
     {
       id: 'profile',
       label: 'My profile',
-      icon: UserRectangleIcon,
+      icon: User,
       onPress: () => {
         console.log('Navigate to Profile');
         onClose();
@@ -162,7 +174,7 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
     {
       id: 'support',
       label: 'Customer support',
-      icon: ServiceHistoryIcon,
+      icon: Headphones,
       onPress: () => {
         console.log('Navigate to Customer Support');
         onClose();
@@ -171,7 +183,7 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
     {
       id: 'logout',
       label: 'Logout',
-      icon: LogoutIcon,
+      icon: LogOut,
       onPress: handleLogout,
     },
   ];
@@ -193,7 +205,7 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
           {
             opacity: overlayAnim.interpolate({
               inputRange: [0, 1],
-              outputRange: [0, 0.5],
+              outputRange: [0, 0.3],
             }),
           },
         ]}
@@ -211,26 +223,18 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
           styles.sidebar,
           {
             transform: [{ translateX: slideAnim }],
+            opacity: fadeAnim,
           },
         ]}
       >
         <SafeAreaView style={styles.safeArea} edges={['top', 'left']}>
-          {/* Decorative Background Pattern from Figma */}
-          <View style={styles.decorativeBackground}>
-            <DecorativeBg
-              width="100%"
-              height="100%"
-              preserveAspectRatio="xMinYMax slice"
-            />
-          </View>
-
           {/* Close Button */}
           <TouchableOpacity
             style={styles.closeButton}
             onPress={onClose}
             activeOpacity={0.7}
           >
-            <CloseIcon width={26} height={26} />
+            <X size={24} color="#FFFFFF" strokeWidth={2} />
           </TouchableOpacity>
 
           {/* Menu Items */}
@@ -245,6 +249,15 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
             ))}
           </View>
         </SafeAreaView>
+
+        {/* Nakshatra Star Pattern Background - positioned at bottom-left corner */}
+        <View style={styles.decorativeBackground}>
+          <DecorativeBg
+            width={SIDEBAR_WIDTH * 1.2}
+            height={SIDEBAR_WIDTH * 1.2}
+            style={styles.nakshatraPattern}
+          />
+        </View>
       </Animated.View>
     </View>
   );
@@ -324,7 +337,7 @@ const MenuItem: React.FC<MenuItemProps> = ({ item, index, visible }) => {
         activeOpacity={1}
       >
         <View style={styles.iconContainer}>
-          <Icon width={20} height={20} fill="#FFFFFF" />
+          <Icon size={20} color="#FFFFFF" strokeWidth={2} />
         </View>
         <Text style={styles.menuLabel}>{item.label}</Text>
       </TouchableOpacity>
@@ -366,15 +379,17 @@ const styles = StyleSheet.create({
   },
   decorativeBackground: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: SCREEN_HEIGHT * 0.45,
+    bottom: -80,
+    left: -30,
+    zIndex: 0,
     overflow: 'hidden',
+  },
+  nakshatraPattern: {
+    opacity: 1,
   },
   closeButton: {
     position: 'absolute',
-    top: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 53 : 53,
+    top: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 20 : 20,
     left: 19,
     width: 26,
     height: 26,
@@ -384,9 +399,10 @@ const styles = StyleSheet.create({
   },
   menuContainer: {
     flex: 1,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 128 : 128,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 60 : 60,
     paddingLeft: 16,
     paddingRight: 16,
+    zIndex: 1,
   },
   menuItemContainer: {
     marginBottom: 39,
