@@ -8,10 +8,10 @@ import { OpenSans_700Bold } from '@expo-google-fonts/open-sans';
 import { useResponsiveLayout } from '../src/utils/responsive';
 
 type WelcomeScreenProps = {
-  onGetStarted?: () => void;
+  navigation?: any;
 };
 
-const WelcomeScreen = ({ onGetStarted }: WelcomeScreenProps) => {
+const WelcomeScreen = ({ navigation }: WelcomeScreenProps) => {
   const [fontsLoaded] = useFonts({
     Lexend_400Regular,
     Lexend_600SemiBold,
@@ -116,7 +116,7 @@ const WelcomeScreen = ({ onGetStarted }: WelcomeScreenProps) => {
               },
             ]}
             activeOpacity={0.8}
-            onPress={onGetStarted}
+            onPress={() => navigation?.navigate('SignIn')}
           >
             <Text
               style={[

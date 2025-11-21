@@ -13,6 +13,7 @@ import {
   Platform,
   ActivityIndicator,
   Keyboard,
+  RefreshControl,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -52,7 +53,13 @@ import {
   AlertCircle,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { GestureHandlerRootView, PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useResponsiveLayout } from '../src/utils/responsive';
+import { useHomeData } from '../src/hooks/useHomeData';
+import { useAuth } from '../src/contexts/AuthContext';
+import { feedbackService } from '../src/services';
+import { handleApiError } from '../src/utils/errorHandler';
+import Sidebar from '../components/Sidebar';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -108,6 +115,20 @@ const topRatedAstrologers = [
 ];
 
 const HomeScreen = () => {
+  // API Data Hook
+  const {
+    userProfile,
+    liveAstrologers: apiLiveAstrologers,
+    topRatedAstrologers: apiTopRatedAstrologers,
+    categories,
+    banners,
+    loading: dataLoading,
+    error: dataError,
+    refetch,
+  } = useHomeData();
+
+  const { user } = useAuth();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -118,6 +139,8 @@ const HomeScreen = () => {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [errors, setErrors] = useState({ name: '', email: '', comments: '' });
   const [focusedField, setFocusedField] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(false);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -125,9 +148,13 @@ const HomeScreen = () => {
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const searchBorderAnim = useRef(new Animated.Value(0)).current;
 
+  // Use API data or fallback to mock data
+  const displayLiveAstrologers = apiLiveAstrologers.length > 0 ? apiLiveAstrologers : liveAstrologers;
+  const displayTopRatedAstrologers = apiTopRatedAstrologers.length > 0 ? apiTopRatedAstrologers : topRatedAstrologers;
+
   // Stagger animation values for cards
-  const liveCardsAnim = useRef(liveAstrologers.map(() => new Animated.Value(0))).current;
-  const topRatedCardsAnim = useRef(topRatedAstrologers.map(() => new Animated.Value(0))).current;
+  const liveCardsAnim = useRef(displayLiveAstrologers.map(() => new Animated.Value(0))).current;
+  const topRatedCardsAnim = useRef(displayTopRatedAstrologers.map(() => new Animated.Value(0))).current;
 
   const [fontsLoaded] = useFonts({
     Lexend_400Regular,
@@ -248,6 +275,18 @@ const HomeScreen = () => {
     return isValid;
   };
 
+  // Handle pull-to-refresh
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } catch (error) {
+      console.error('Refresh error:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   // Handle form submission
   const handleSubmit = async () => {
     if (!validateForm()) {
@@ -256,8 +295,14 @@ const HomeScreen = () => {
 
     setIsSubmitting(true);
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // Submit feedback to API
+      await feedbackService.submitFeedback({
+        name,
+        email: email || undefined,
+        comments,
+      });
+
       setIsSubmitting(false);
       setSubmitSuccess(true);
 
@@ -271,7 +316,36 @@ const HomeScreen = () => {
       setTimeout(() => {
         setSubmitSuccess(false);
       }, 3000);
-    }, 1500);
+    } catch (error: any) {
+      console.error('Feedback submission error:', error);
+      setIsSubmitting(false);
+      handleApiError(error);
+    }
+  };
+
+  // Handle swipe gesture for opening sidebar
+  const onGestureEvent = Animated.event(
+    [{ nativeEvent: { translationX: new Animated.Value(0) } }],
+    { useNativeDriver: false }
+  );
+
+  const onHandlerStateChange = (event: any) => {
+    if (event.nativeEvent.state === State.END) {
+      const { translationX, velocityX } = event.nativeEvent;
+      // Open sidebar if swipe right from left edge with sufficient distance or velocity
+      if (translationX > 50 || velocityX > 500) {
+        setSidebarVisible(true);
+      }
+    }
+  };
+
+  // Handle sidebar toggle
+  const toggleSidebar = () => {
+    setSidebarVisible(!sidebarVisible);
+  };
+
+  const closeSidebar = () => {
+    setSidebarVisible(false);
   };
 
   if (!fontsLoaded) {
@@ -279,31 +353,56 @@ const HomeScreen = () => {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style="dark" />
 
-      <Animated.ScrollView
+        {/* Sidebar Component */}
+        <Sidebar visible={sidebarVisible} onClose={closeSidebar} />
+
+        <PanGestureHandler
+          onGestureEvent={onGestureEvent}
+          onHandlerStateChange={onHandlerStateChange}
+          activeOffsetX={[10, 100]}
+          failOffsetX={[-100, -10]}
+        >
+          <Animated.View style={{ flex: 1 }}>
+            <Animated.ScrollView
         style={[styles.container, {
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }],
         }]}
         showsVerticalScrollIndicator={false}
         bounces={true}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#2930a6"
+            colors={['#2930a6']}
+          />
+        }
       >
         {/* Header Section */}
         <Animated.View style={[styles.header, {
           paddingHorizontal: 20 * scale,
           transform: [{ scale: scaleAnim }],
         }]}>
-          <View style={styles.headerLeft}>
+          <TouchableOpacity
+            style={styles.headerLeft}
+            onPress={toggleSidebar}
+            activeOpacity={0.7}
+          >
             <View style={[styles.profileCircle, { width: 56 * scale, height: 56 * scale }]}>
               <User size={28 * scale} color="#2930A6" />
             </View>
             <View style={styles.greetingContainer}>
               <Text style={[styles.heyText, { fontSize: 16 * scale }]}>Hey</Text>
-              <Text style={[styles.nameText, { fontSize: 16 * scale }]}>Arun</Text>
+              <Text style={[styles.nameText, { fontSize: 16 * scale }]}>
+                {userProfile?.name || user?.name || 'Guest'}
+              </Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
           <View style={styles.headerRight}>
             <AnimatedButton
@@ -314,7 +413,9 @@ const HomeScreen = () => {
               }]}
             >
               <IndianRupee size={18 * scale} color="#FFFFFF" />
-              <Text style={[styles.walletText, { fontSize: 16 * scale }]}>41</Text>
+              <Text style={[styles.walletText, { fontSize: 16 * scale }]}>
+                {userProfile?.walletBalance?.toFixed(2) || '0.00'}
+              </Text>
             </AnimatedButton>
 
             <AnimatedButton style={[styles.bellButton, { width: 28 * scale, height: 28 * scale }]}>
@@ -401,40 +502,75 @@ const HomeScreen = () => {
           />
         </View>
 
-        {/* CTA Banner */}
-        <View style={[styles.ctaBanner, {
-          marginHorizontal: 20 * scale,
-          marginBottom: 30 * scale,
-          height: 115 * scale,
-          borderRadius: 16 * scale,
-          padding: 16 * scale
-        }]}>
-          <View style={styles.ctaContent}>
-            <Text style={[styles.ctaTitle, { fontSize: 17 * scale, lineHeight: 20 * scale }]}>
-              Talk to astrologer and{'\n'}clear your doubts
-            </Text>
-            <Text style={[styles.ctaSubtitle, { fontSize: 10 * scale, marginTop: 6 * scale }]}>
-              Open up to the thing that matters among the people
-            </Text>
-            <AnimatedButton
-              style={[styles.chatNowButton, {
-                marginTop: 8 * scale,
-                height: 28 * scale,
-                paddingHorizontal: 16 * scale,
-                borderRadius: 10 * scale
-              }]}
-            >
-              <Text style={[styles.chatNowText, { fontSize: 14 * scale }]}>Chat Now</Text>
-            </AnimatedButton>
+        {/* CTA Banner - Dynamic from API */}
+        {(banners && banners.length > 0 ? banners : [{
+          id: 'default',
+          title: 'Talk to astrologer and\nclear your doubts',
+          subtitle: 'Open up to the thing that matters among the people',
+          buttonText: 'Chat Now',
+          buttonAction: '/chat',
+          backgroundColor: null,
+          image: null,
+          order: 1,
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }]).slice(0, 1).map((banner) => (
+          <View
+            key={banner.id}
+            style={[styles.ctaBanner, {
+              marginHorizontal: 20 * scale,
+              marginBottom: 30 * scale,
+              height: 115 * scale,
+              borderRadius: 16 * scale,
+              padding: 16 * scale,
+              backgroundColor: banner.backgroundColor || 'rgba(255, 255, 255, 0.5)',
+            }]}
+          >
+            <View style={styles.ctaContent}>
+              <Text style={[styles.ctaTitle, { fontSize: 17 * scale, lineHeight: 20 * scale }]}>
+                {banner.title}
+              </Text>
+              {banner.subtitle && (
+                <Text style={[styles.ctaSubtitle, { fontSize: 10 * scale, marginTop: 6 * scale }]}>
+                  {banner.subtitle}
+                </Text>
+              )}
+              {banner.buttonText && (
+                <AnimatedButton
+                  style={[styles.chatNowButton, {
+                    marginTop: 8 * scale,
+                    height: 28 * scale,
+                    paddingHorizontal: 16 * scale,
+                    borderRadius: 10 * scale
+                  }]}
+                  onPress={() => console.log('Banner action:', banner.buttonAction)}
+                >
+                  <Text style={[styles.chatNowText, { fontSize: 14 * scale }]}>
+                    {banner.buttonText}
+                  </Text>
+                </AnimatedButton>
+              )}
+            </View>
+            {banner.image ? (
+              <View style={[styles.bannerImage, { width: 193 * scale, height: 115 * scale }]}>
+                <Image
+                  source={{ uri: banner.image }}
+                  style={[{ width: 193 * scale, height: 115 * scale }]}
+                  resizeMode="contain"
+                />
+              </View>
+            ) : (
+              <View style={[styles.bannerImage, { width: 193 * scale, height: 115 * scale }]}>
+                <Image
+                  source={require('../assets/images/banner-decoration.png')}
+                  style={[{ width: 193 * scale, height: 115 * scale }]}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
           </View>
-          <View style={[styles.bannerImage, { width: 193 * scale, height: 115 * scale }]}>
-            <Image
-              source={require('../assets/images/banner-decoration.png')}
-              style={[{ width: 193 * scale, height: 115 * scale }]}
-              resizeMode="contain"
-            />
-          </View>
-        </View>
+        ))}
 
         {/* Live Astrologers Section */}
         <View style={[styles.section, { marginBottom: 30 * scale }]}>
@@ -451,7 +587,7 @@ const HomeScreen = () => {
             snapToInterval={122 * scale}
             decelerationRate="fast"
           >
-            {liveAstrologers.map((astrologer, index) => (
+            {displayLiveAstrologers.map((astrologer, index) => (
               <LiveAstrologerCard
                 key={astrologer.id}
                 astrologer={astrologer}
@@ -473,7 +609,7 @@ const HomeScreen = () => {
             </TouchableOpacity>
           </View>
 
-          {topRatedAstrologers.map((astrologer, index) => (
+          {displayTopRatedAstrologers.map((astrologer, index) => (
             <TopRatedCard
               key={astrologer.id}
               astrologer={astrologer}
@@ -684,7 +820,10 @@ const HomeScreen = () => {
           scale={scale}
         />
       </Animated.View>
-    </SafeAreaView>
+          </Animated.View>
+        </PanGestureHandler>
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 };
 
@@ -736,7 +875,7 @@ const LiveAstrologerCard = ({ astrologer, index, scale, animValue, isLast }: any
         ]}
       >
         <Image
-          source={astrologer.image}
+          source={typeof astrologer.image === 'string' ? { uri: astrologer.image } : astrologer.image}
           style={styles.liveAstrologerImage}
           resizeMode="cover"
         />
@@ -810,7 +949,7 @@ const TopRatedCard = ({ astrologer, index, scale, animValue, isLast }: any) => {
           borderRadius: 16 * scale
         }]}>
           <Image
-            source={astrologer.image}
+            source={typeof astrologer.image === 'string' ? { uri: astrologer.image } : astrologer.image}
             style={styles.topRatedImage}
             resizeMode="cover"
           />
@@ -827,11 +966,11 @@ const TopRatedCard = ({ astrologer, index, scale, animValue, isLast }: any) => {
           <View style={[styles.ratingRow, { marginTop: 6 * scale }]}>
             <Star size={16 * scale} fill="#FFCF0D" color="#FFCF0D" />
             <Text style={[styles.ratingText, { fontSize: 13 * scale }]}>{astrologer.rating}</Text>
-            <Text style={[styles.callsText, { fontSize: 13 * scale }]}>{astrologer.calls} calls</Text>
+            <Text style={[styles.callsText, { fontSize: 13 * scale }]}>{astrologer.totalCalls || astrologer.calls} calls</Text>
           </View>
           <View style={[styles.priceRow, { marginTop: 4 * scale }]}>
             <IndianRupee size={12 * scale} color="#000000" />
-            <Text style={[styles.priceText, { fontSize: 13 * scale }]}>{astrologer.price}/minute</Text>
+            <Text style={[styles.priceText, { fontSize: 13 * scale }]}>{astrologer.pricePerMinute || astrologer.price}/minute</Text>
           </View>
         </View>
 

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
@@ -17,15 +17,25 @@ import {
 import { LibreBodoni_600SemiBold } from '@expo-google-fonts/libre-bodoni';
 import IndiaFlag from '../assets/images/indiaflag.svg';
 import { useResponsiveLayout } from '../src/utils/responsive';
+import { useAuth } from '../src/contexts/AuthContext';
+import { validatePhone, formatPhoneToE164, getPhoneValidationError } from '../src/utils/phoneValidator';
+import { handleApiError } from '../src/utils/errorHandler';
 
 const BASE_WIDTH = 384;
 
 type SignInScreenProps = {
-  onGetOtp?: () => void;
+  onSuccess?: () => void;
 };
 
-const SignInScreen = ({ onGetOtp }: SignInScreenProps) => {
+const SignInScreen = ({ onSuccess }: SignInScreenProps) => {
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const { sendOTP, login } = useAuth();
+
   const [fontsLoaded] = useFonts({
     Lexend_400Regular,
     Lexend_700Bold,
@@ -36,6 +46,91 @@ const SignInScreen = ({ onGetOtp }: SignInScreenProps) => {
   });
 
   const { cardWidth, scale, breakpoint } = useResponsiveLayout();
+
+  /**
+   * Handle Send OTP
+   */
+  const handleSendOtp = async () => {
+    try {
+      setErrorMessage(null);
+
+      // Format phone to E.164
+      const formattedPhone = phoneNumber.startsWith('+')
+        ? phoneNumber
+        : `+91${phoneNumber}`;
+
+      // Validate phone number
+      const validationError = getPhoneValidationError(formattedPhone);
+      if (validationError) {
+        setErrorMessage(validationError);
+        Alert.alert('Invalid Phone', validationError);
+        return;
+      }
+
+      setLoading(true);
+      await sendOTP(formattedPhone);
+
+      setOtpSent(true);
+      Alert.alert('OTP Sent', 'Please check your phone for the OTP code.');
+    } catch (error: any) {
+      console.error('Send OTP error:', error);
+      handleApiError(error);
+      setErrorMessage('Failed to send OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Handle Verify OTP
+   */
+  const handleVerifyOtp = async () => {
+    try {
+      setErrorMessage(null);
+
+      if (!otp || otp.length !== 6) {
+        setErrorMessage('Please enter a valid 6-digit OTP');
+        Alert.alert('Invalid OTP', 'Please enter a valid 6-digit OTP');
+        return;
+      }
+
+      setLoading(true);
+
+      const formattedPhone = phoneNumber.startsWith('+')
+        ? phoneNumber
+        : `+91${phoneNumber}`;
+
+      await login(formattedPhone, otp);
+
+      Alert.alert('Success', 'Login successful!');
+      if (onSuccess) {
+        onSuccess();
+      }
+    } catch (error: any) {
+      console.error('Verify OTP error:', error);
+      handleApiError(error);
+      setErrorMessage('Invalid OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Handle Resend OTP
+   */
+  const handleResendOtp = async () => {
+    setOtp('');
+    await handleSendOtp();
+  };
+
+  /**
+   * Handle Back to Phone Input
+   */
+  const handleBackToPhone = () => {
+    setOtpSent(false);
+    setOtp('');
+    setErrorMessage(null);
+  };
 
   const featureCardMeasures = useMemo(() => {
     const baseWidth = cardWidth - 44 * scale;
@@ -230,52 +325,128 @@ const SignInScreen = ({ onGetOtp }: SignInScreenProps) => {
             ]}
           />
 
-          {/* Phone Input */}
-          <View
-            style={[
-              styles.phoneInputContainer,
-              {
-                marginTop: 50 * scale,
-                height: 51 * scale,
-                borderRadius: 15 * scale,
-                paddingHorizontal: 10 * scale,
-                gap: 9 * scale,
-              },
-            ]}
-          >
-            {/* Indian Flag */}
-            <View style={[styles.flagContainer, { width: 40 * scale, height: 25 * scale }]}>
-              <IndiaFlag width={40 * scale} height={25 * scale} />
-            </View>
-
-            {/* +91 */}
-            <Text
+          {/* Phone Input or OTP Input */}
+          {!otpSent ? (
+            <View
               style={[
-                styles.countryCode,
-                { fontFamily: 'Nunito_400Regular', fontSize: 18 * scale },
+                styles.phoneInputContainer,
+                {
+                  marginTop: 50 * scale,
+                  height: 51 * scale,
+                  borderRadius: 15 * scale,
+                  paddingHorizontal: 10 * scale,
+                  gap: 9 * scale,
+                },
               ]}
             >
-              +91
-            </Text>
+              {/* Indian Flag */}
+              <View style={[styles.flagContainer, { width: 40 * scale, height: 25 * scale }]}>
+                <IndiaFlag width={40 * scale} height={25 * scale} />
+              </View>
 
-            {/* Dropdown Arrow */}
-            <Text style={{ fontSize: 16 * scale, color: '#000' }}>▼</Text>
+              {/* +91 */}
+              <Text
+                style={[
+                  styles.countryCode,
+                  { fontFamily: 'Nunito_400Regular', fontSize: 18 * scale },
+                ]}
+              >
+                +91
+              </Text>
 
-            {/* Input */}
-            <TextInput
+              {/* Dropdown Arrow */}
+              <Text style={{ fontSize: 16 * scale, color: '#000' }}>▼</Text>
+
+              {/* Input */}
+              <TextInput
+                style={[
+                  styles.phoneInput,
+                  { fontFamily: 'OpenSans_400Regular', fontSize: 14.78 * scale },
+                ]}
+                placeholder="Enter your phone number"
+                placeholderTextColor="#8c8c8c"
+                keyboardType="phone-pad"
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                editable={!loading}
+              />
+            </View>
+          ) : (
+            <>
+              {/* OTP Input */}
+              <View
+                style={[
+                  styles.phoneInputContainer,
+                  {
+                    marginTop: 50 * scale,
+                    height: 51 * scale,
+                    borderRadius: 15 * scale,
+                    paddingHorizontal: 15 * scale,
+                  },
+                ]}
+              >
+                <TextInput
+                  style={[
+                    styles.otpInput,
+                    { fontFamily: 'OpenSans_400Regular', fontSize: 18 * scale },
+                  ]}
+                  placeholder="Enter 6-digit OTP"
+                  placeholderTextColor="#8c8c8c"
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  value={otp}
+                  onChangeText={setOtp}
+                  editable={!loading}
+                />
+              </View>
+
+              {/* Resend OTP Link */}
+              <TouchableOpacity
+                onPress={handleResendOtp}
+                disabled={loading}
+                style={{ marginTop: 12 * scale }}
+              >
+                <Text
+                  style={[
+                    styles.resendText,
+                    { fontFamily: 'Nunito_700Bold', fontSize: 14 * scale },
+                  ]}
+                >
+                  Resend OTP
+                </Text>
+              </TouchableOpacity>
+
+              {/* Back to Phone Link */}
+              <TouchableOpacity
+                onPress={handleBackToPhone}
+                disabled={loading}
+                style={{ marginTop: 8 * scale }}
+              >
+                <Text
+                  style={[
+                    styles.backText,
+                    { fontFamily: 'Nunito_400Regular', fontSize: 13 * scale },
+                  ]}
+                >
+                  ← Change Phone Number
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* Error Message */}
+          {errorMessage && (
+            <Text
               style={[
-                styles.phoneInput,
-                { fontFamily: 'OpenSans_400Regular', fontSize: 14.78 * scale },
+                styles.errorText,
+                { fontFamily: 'Nunito_400Regular', fontSize: 13 * scale, marginTop: 10 * scale },
               ]}
-              placeholder="Enter your phone number"
-              placeholderTextColor="#8c8c8c"
-              keyboardType="phone-pad"
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-            />
-          </View>
+            >
+              {errorMessage}
+            </Text>
+          )}
 
-          {/* Get OTP Button */}
+          {/* Get OTP / Verify OTP Button */}
           <TouchableOpacity
             style={[
               styles.otpButton,
@@ -284,19 +455,25 @@ const SignInScreen = ({ onGetOtp }: SignInScreenProps) => {
                 height: 56 * scale,
                 borderRadius: 50 * scale,
                 paddingHorizontal: 32 * scale,
+                opacity: loading ? 0.7 : 1,
               },
             ]}
             activeOpacity={0.8}
-            onPress={onGetOtp}
+            onPress={otpSent ? handleVerifyOtp : handleSendOtp}
+            disabled={loading}
           >
-            <Text
-              style={[
-                styles.otpButtonText,
-                { fontFamily: 'Lexend_700Bold', fontSize: 22 * scale },
-              ]}
-            >
-              Get OTP
-            </Text>
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text
+                style={[
+                  styles.otpButtonText,
+                  { fontFamily: 'Lexend_700Bold', fontSize: 22 * scale },
+                ]}
+              >
+                {otpSent ? 'Verify OTP' : 'Get OTP'}
+              </Text>
+            )}
           </TouchableOpacity>
 
           {/* Terms and Privacy */}
@@ -425,6 +602,29 @@ const styles = StyleSheet.create({
   termsLink: {
     color: '#2930a6',
     textDecorationLine: 'underline',
+  },
+  otpInput: {
+    flex: 1,
+    fontSize: 18,
+    color: '#000',
+    textAlign: 'center',
+    letterSpacing: 8,
+  },
+  errorText: {
+    color: '#dc2626',
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  resendText: {
+    color: '#2930a6',
+    fontSize: 14,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
+  },
+  backText: {
+    color: '#6b7280',
+    fontSize: 13,
+    textAlign: 'center',
   },
 });
 

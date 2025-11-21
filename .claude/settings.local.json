@@ -9,7 +9,13 @@
       "Bash(curl:*)",
       "Bash(npm install:*)",
       "Bash(npm start)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(npx tsc:*)",
+      "Bash(./gradlew clean:*)",
+      "Bash(npm run android:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,18 +1,107 @@
-import React, { useState } from 'react';
+/**
+ * Main App Component
+ * Handles navigation and authentication flow
+ */
+
+import React from 'react';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+
+// Screens
 import WelcomeScreen from './screens/WelcomeScreen';
 import SignInScreen from './screens/SignInScreen';
 import HomeScreen from './screens/HomeScreen';
 
+// Create Stack Navigator
+const Stack = createNativeStackNavigator();
+
+// Create React Query Client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 2,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes (previously cacheTime in v4)
+    },
+  },
+});
+
+/**
+ * Navigation Component
+ * Handles authenticated and unauthenticated flows
+ */
+const Navigation = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Show loading screen while checking auth
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2930a6" />
+      </View>
+    );
+  }
+
+  return (
+    <NavigationContainer>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          animation: 'slide_from_right',
+        }}
+      >
+        {!isAuthenticated ? (
+          // Unauthenticated Stack
+          <>
+            <Stack.Screen name="Welcome" component={WelcomeScreen} />
+            <Stack.Screen name="SignIn" component={SignInScreenWrapper} />
+          </>
+        ) : (
+          // Authenticated Stack
+          <>
+            <Stack.Screen name="Home" component={HomeScreen} />
+          </>
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};
+
+/**
+ * SignIn Screen Wrapper
+ * Handles navigation after successful login
+ */
+const SignInScreenWrapper = ({ navigation }: any) => {
+  return <SignInScreen onSuccess={() => {
+    // Navigation will automatically update due to isAuthenticated change
+    // No need to navigate manually
+  }} />;
+};
+
+/**
+ * Main App Component
+ */
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState('home'); // 'welcome', 'signIn', 'home'
-
-  if (currentScreen === 'home') {
-    return <HomeScreen />;
-  }
-
-  if (currentScreen === 'signIn') {
-    return <SignInScreen onGetOtp={() => setCurrentScreen('home')} />;
-  }
-
-  return <WelcomeScreen onGetStarted={() => setCurrentScreen('signIn')} />;
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <Navigation />
+        </AuthProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
+  );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+});
