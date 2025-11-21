@@ -130,6 +130,18 @@ export interface Category {
   updatedAt: string;
 }
 
+// Specialization Model
+export interface Specialization {
+  id: string;
+  name: string;
+  icon?: string | null;
+  description?: string | null;
+  order: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Banner Model
 export interface Banner {
   id: string;

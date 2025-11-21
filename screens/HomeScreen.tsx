@@ -852,7 +852,10 @@ const HomeScreen = ({ navigation }: any) => {
         <NavItem
           icon={MessageSquare}
           isActive={activeTab === 1}
-          onPress={() => setActiveTab(1)}
+          onPress={() => {
+            setActiveTab(1);
+            navigation.navigate('BrowseChat');
+          }}
           scale={scale}
         />
         <NavItem

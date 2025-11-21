@@ -49,6 +49,7 @@ export const API_ENDPOINTS = {
   CONTENT: {
     CATEGORIES: '/api/v1/categories',
     BANNERS: '/api/v1/banners',
+    SPECIALIZATIONS: '/api/v1/specializations',
   },
 
   // Feedback

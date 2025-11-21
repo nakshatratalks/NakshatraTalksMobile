@@ -5,7 +5,7 @@
 
 import { apiClient } from './api.client';
 import { API_ENDPOINTS } from '../config/api.config';
-import { Category, Banner, ApiResponse } from '../types/api.types';
+import { Category, Banner, Specialization, ApiResponse } from '../types/api.types';
 
 class ContentService {
   /**
@@ -26,6 +26,17 @@ class ContentService {
   async getBanners(): Promise<Banner[]> {
     const response = await apiClient.get<ApiResponse<Banner[]>>(
       API_ENDPOINTS.CONTENT.BANNERS
+    );
+    return response.data!;
+  }
+
+  /**
+   * Get all specializations
+   * @returns Promise<Specialization[]>
+   */
+  async getSpecializations(): Promise<Specialization[]> {
+    const response = await apiClient.get<ApiResponse<Specialization[]>>(
+      API_ENDPOINTS.CONTENT.SPECIALIZATIONS
     );
     return response.data!;
   }
