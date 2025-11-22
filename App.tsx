@@ -16,6 +16,7 @@ import WelcomeScreen from './screens/WelcomeScreen';
 import SignInScreen from './screens/SignInScreen';
 import HomeScreen from './screens/HomeScreen';
 import BrowseChatScreen from './screens/BrowseChatScreen';
+import BrowseCallScreen from './screens/BrowseCallScreen';
 
 // Create Navigator
 const Stack = createNativeStackNavigator();
@@ -75,6 +76,14 @@ const Navigation = () => {
             <Stack.Screen
               name="BrowseChat"
               component={BrowseChatScreen}
+              options={{
+                animation: 'fade',
+                animationDuration: 200,
+              }}
+            />
+            <Stack.Screen
+              name="BrowseCall"
+              component={BrowseCallScreen}
               options={{
                 animation: 'fade',
                 animationDuration: 200,

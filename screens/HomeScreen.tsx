@@ -867,7 +867,10 @@ const HomeScreen = ({ navigation }: any) => {
         <NavItem
           icon={Phone}
           isActive={activeTab === 3}
-          onPress={() => setActiveTab(3)}
+          onPress={() => {
+            setActiveTab(3);
+            navigation.navigate('BrowseCall');
+          }}
           scale={scale}
         />
         <NavItem

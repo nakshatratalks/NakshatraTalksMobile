@@ -74,7 +74,7 @@ const getSpecializationIcon = (name: string) => {
   return Sparkles; // default
 };
 
-const BrowseChatScreen = ({ navigation }: any) => {
+const BrowseCallScreen = ({ navigation }: any) => {
   const {
     userProfile,
     astrologers,
@@ -91,7 +91,7 @@ const BrowseChatScreen = ({ navigation }: any) => {
   const { user } = useAuth();
 
   const [searchFocused, setSearchFocused] = useState(false);
-  const [activeTab, setActiveTab] = useState(1); // Chat tab active
+  const [activeTab, setActiveTab] = useState(3); // Call tab active (index 3)
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
 
@@ -476,7 +476,10 @@ const BrowseChatScreen = ({ navigation }: any) => {
             <NavItem
               icon={MessageSquare}
               isActive={activeTab === 1}
-              onPress={() => setActiveTab(1)}
+              onPress={() => {
+                setActiveTab(1);
+                navigation.navigate('BrowseChat');
+              }}
               scale={scale}
             />
             <NavItem
@@ -488,10 +491,7 @@ const BrowseChatScreen = ({ navigation }: any) => {
             <NavItem
               icon={Phone}
               isActive={activeTab === 3}
-              onPress={() => {
-                setActiveTab(3);
-                navigation.navigate('BrowseCall');
-              }}
+              onPress={() => setActiveTab(3)}
               scale={scale}
             />
             <NavItem
@@ -632,7 +632,7 @@ const AstrologerCard = ({ astrologer, index, scale, animValue, isLast }: any) =>
           </Text>
         </View>
 
-        {/* Right Side - Price & Chat Button */}
+        {/* Right Side - Price & Call Button */}
         <View style={styles.rightSection}>
           <View style={[styles.priceRow, { marginTop: 50 * scale }]}>
             <IndianRupee size={12 * scale} color="#2930A6" />
@@ -641,15 +641,15 @@ const AstrologerCard = ({ astrologer, index, scale, animValue, isLast }: any) =>
             </Text>
           </View>
           <AnimatedButton
-            style={[styles.chatButton, {
+            style={[styles.callButton, {
               marginTop: 10 * scale,
               paddingHorizontal: 20 * scale,
               paddingVertical: 8 * scale,
               borderRadius: 25 * scale
             }]}
-            onPress={() => console.log('Chat with', astrologer.name)}
+            onPress={() => console.log('Call with', astrologer.name)}
           >
-            <Text style={[styles.chatButtonText, { fontSize: 18 * scale }]}>Chat</Text>
+            <Text style={[styles.callButtonText, { fontSize: 18 * scale }]}>Call</Text>
           </AnimatedButton>
         </View>
       </TouchableOpacity>
@@ -1086,7 +1086,7 @@ const styles = StyleSheet.create({
     color: '#2930A6',
     letterSpacing: -0.3,
   },
-  chatButton: {
+  callButton: {
     backgroundColor: '#2930A6',
     borderRadius: 25,
     justifyContent: 'center',
@@ -1099,7 +1099,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(0, 0, 0, 0.1)',
   },
-  chatButtonText: {
+  callButtonText: {
     fontFamily: 'Lexend_400Regular',
     fontSize: 18,
     color: '#FFFFFF',
@@ -1139,4 +1139,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default BrowseChatScreen;
+export default BrowseCallScreen;
