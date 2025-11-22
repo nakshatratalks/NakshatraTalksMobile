@@ -18,7 +18,8 @@
       "Bash(taskkill:*)",
       "Bash(npx expo prebuild:*)",
       "Bash(echo:*)",
-      "Bash(npm start -- --reset-cache)"
+      "Bash(npm start -- --reset-cache)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

@@ -10,3 +10,5 @@ export { astrologerService } from './astrologer.service';
 export { walletService } from './wallet.service';
 export { contentService } from './content.service';
 export { feedbackService } from './feedback.service';
+export { chatService } from './chat.service';
+export { callService } from './call.service';

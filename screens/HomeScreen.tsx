@@ -462,7 +462,14 @@ const HomeScreen = ({ navigation }: any) => {
             activeOpacity={0.7}
           >
             <View style={[styles.profileCircle, { width: 56 * scale, height: 56 * scale }]}>
-              <User size={28 * scale} color="#2930A6" />
+              {userProfile?.profileImage ? (
+                <Image
+                  source={{ uri: userProfile.profileImage }}
+                  style={styles.profileImage}
+                />
+              ) : (
+                <User size={28 * scale} color="#2930A6" />
+              )}
             </View>
             <View style={styles.greetingContainer}>
               <Text style={[styles.heyText, { fontSize: 16 * scale }]}>Hey</Text>
@@ -1247,6 +1254,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#D9D9D9',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'rgba(41, 48, 166, 0.2)',
+  },
+  profileImage: {
+    width: '100%',
+    height: '100%',
   },
   greetingContainer: {
     flexDirection: 'column',

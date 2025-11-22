@@ -94,6 +94,12 @@ export interface Astrologer {
   totalReviews?: number;
   isAvailable: boolean;
   isLive: boolean;
+  // Chat & Call specific fields
+  chatAvailable?: boolean;
+  callAvailable?: boolean;
+  chatPricePerMinute?: number;
+  callPricePerMinute?: number;
+  lastActivityAt?: string | null;
   workingHours?: Record<string, string>;
   nextAvailableAt?: string | null;
   status?: 'pending' | 'approved' | 'rejected' | 'inactive';
@@ -249,14 +255,40 @@ export interface FeedbackData {
 // Search Filters
 export interface SearchFilters {
   q?: string;
+  language?: string;
   languages?: string;
   specialization?: string;
   minRating?: number;
   minPrice?: number;
   maxPrice?: number;
   isAvailable?: boolean;
-  sortBy?: 'rating' | 'price_per_minute' | 'experience' | 'total_calls';
+  onlyLive?: boolean;
+  sortBy?: 'rating' | 'price_per_minute' | 'experience' | 'total_calls' | 'chat_price_per_minute' | 'call_price_per_minute';
   order?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+}
+
+// Balance Validation Response
+export interface BalanceValidationResponse {
+  canStartChat?: boolean;
+  canStartCall?: boolean;
+  currentBalance: number;
+  pricePerMinute: number;
+  minimumRequired: number;
+  estimatedMinutes?: number;
+  shortfall?: number;
+}
+
+// Session Creation Data
+export interface CreateSessionData {
+  astrologerId: string;
+  sessionType: 'chat' | 'call' | 'video';
+}
+
+// End Session Data
+export interface EndSessionData {
+  endReason?: 'user_ended' | 'astrologer_ended' | 'timeout' | 'insufficient_balance';
 }
 
 // Search Results

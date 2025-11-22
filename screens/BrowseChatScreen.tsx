@@ -637,7 +637,7 @@ const AstrologerCard = ({ astrologer, index, scale, animValue, isLast }: any) =>
           <View style={[styles.priceRow, { marginTop: 50 * scale }]}>
             <IndianRupee size={12 * scale} color="#2930A6" />
             <Text style={[styles.priceText, { fontSize: 10 * scale }]}>
-              {astrologer.pricePerMinute}/min
+              {astrologer.chatPricePerMinute || astrologer.pricePerMinute}/min
             </Text>
           </View>
           <AnimatedButton

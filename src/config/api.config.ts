@@ -57,10 +57,25 @@ export const API_ENDPOINTS = {
 
   // Chat
   CHAT: {
+    AVAILABLE_ASTROLOGERS: '/api/v1/chat/astrologers/available',
+    VALIDATE_BALANCE: '/api/v1/chat/validate-balance',
     SESSIONS: '/api/v1/chat/sessions',
+    ACTIVE_SESSION: '/api/v1/chat/sessions/active',
     END_SESSION: (sessionId: string) => `/api/v1/chat/sessions/${sessionId}/end`,
     MESSAGES: (sessionId: string) => `/api/v1/chat/sessions/${sessionId}/messages`,
     RATING: (sessionId: string) => `/api/v1/chat/sessions/${sessionId}/rating`,
+  },
+
+  // Call
+  CALL: {
+    AVAILABLE_ASTROLOGERS: '/api/v1/call/astrologers',
+    SPECIALIZATIONS: '/api/v1/call/specializations',
+    VALIDATE_BALANCE: '/api/v1/call/validate-balance',
+    SESSIONS: '/api/v1/call/sessions',
+    ACTIVE_SESSION: '/api/v1/call/sessions/active',
+    END_SESSION: (sessionId: string) => `/api/v1/call/sessions/${sessionId}/end`,
+    SESSION_DETAILS: (sessionId: string) => `/api/v1/call/sessions/${sessionId}`,
+    RATING: (sessionId: string) => `/api/v1/call/sessions/${sessionId}/rating`,
   },
 
   // Notifications

@@ -52,7 +52,7 @@ import {
   BadgeCheck,
 } from 'lucide-react-native';
 import { useResponsiveLayout } from '../src/utils/responsive';
-import { useBrowseChatData } from '../src/hooks/useBrowseChatData';
+import { useBrowseCallData } from '../src/hooks/useBrowseCallData';
 import { useAuth } from '../src/contexts/AuthContext';
 import Sidebar from '../components/Sidebar';
 import { Astrologer } from '../src/types/api.types';
@@ -86,7 +86,7 @@ const BrowseCallScreen = ({ navigation }: any) => {
     refetch,
     setSearchQuery,
     setSelectedSpecialization,
-  } = useBrowseChatData();
+  } = useBrowseCallData();
 
   const { user } = useAuth();
 
@@ -637,7 +637,7 @@ const AstrologerCard = ({ astrologer, index, scale, animValue, isLast }: any) =>
           <View style={[styles.priceRow, { marginTop: 50 * scale }]}>
             <IndianRupee size={12 * scale} color="#2930A6" />
             <Text style={[styles.priceText, { fontSize: 10 * scale }]}>
-              {astrologer.pricePerMinute}/min
+              {astrologer.callPricePerMinute || astrologer.pricePerMinute}/min
             </Text>
           </View>
           <AnimatedButton
