@@ -3,9 +3,9 @@
  * Centralized error handling for API requests
  */
 
-import { Alert } from 'react-native';
 import { AxiosError } from 'axios';
 import { ApiError, ErrorCode } from '../types/api.types';
+import NotificationService from './notificationService';
 
 export interface ErrorHandlerOptions {
   showAlert?: boolean;
@@ -53,14 +53,13 @@ export const handleApiError = (
       case 400:
         if (errorCode === 'INSUFFICIENT_BALANCE') {
           if (showAlert) {
-            Alert.alert(
-              'Insufficient Balance',
+            NotificationService.warning(
               'Please recharge your wallet to continue.',
-              [{ text: 'OK' }]
+              'Insufficient Balance'
             );
           }
         } else if (showAlert) {
-          Alert.alert('Invalid Request', errorMessage);
+          NotificationService.error(errorMessage, 'Invalid Request');
         }
         break;
 
@@ -70,7 +69,7 @@ export const handleApiError = (
           onUnauthorized();
         }
         if (showAlert) {
-          Alert.alert('Session Expired', 'Please sign in again.');
+          NotificationService.error('Please sign in again.', 'Session Expired');
         }
         break;
 
@@ -79,37 +78,37 @@ export const handleApiError = (
           onForbidden();
         }
         if (showAlert) {
-          Alert.alert('Access Denied', errorMessage);
+          NotificationService.error(errorMessage, 'Access Denied');
         }
         break;
 
       case 404:
         if (showAlert) {
-          Alert.alert('Not Found', 'The requested resource was not found.');
+          NotificationService.error('The requested resource was not found.', 'Not Found');
         }
         break;
 
       case 409:
         if (showAlert) {
-          Alert.alert('Conflict', errorMessage);
+          NotificationService.error(errorMessage, 'Conflict');
         }
         break;
 
       case 429:
         if (showAlert) {
-          Alert.alert('Too Many Requests', 'Please try again later.');
+          NotificationService.warning('Please try again later.', 'Too Many Requests');
         }
         break;
 
       case 500:
         if (showAlert) {
-          Alert.alert('Server Error', 'Something went wrong. Please try again.');
+          NotificationService.error('Something went wrong. Please try again.', 'Server Error');
         }
         break;
 
       default:
         if (showAlert) {
-          Alert.alert('Error', errorMessage);
+          NotificationService.error(errorMessage, 'Error');
         }
     }
   } else if (error.request) {
@@ -118,12 +117,12 @@ export const handleApiError = (
     errorCode = 'NETWORK_ERROR';
 
     if (showAlert) {
-      Alert.alert('Network Error', errorMessage);
+      NotificationService.error(errorMessage, 'Network Error');
     }
   } else {
     // Error setting up request
     if (showAlert) {
-      Alert.alert('Error', errorMessage);
+      NotificationService.error(errorMessage, 'Error');
     }
   }
 
@@ -186,18 +185,16 @@ export const getErrorMessage = (code: string): string => {
 };
 
 /**
- * Show error alert with custom options
+ * Show error notification with custom options
  *
- * @param title - Alert title
- * @param message - Alert message
- * @param buttons - Alert buttons
+ * @param title - Notification title
+ * @param message - Notification message
  */
 export const showErrorAlert = (
   title: string,
-  message: string,
-  buttons?: any[]
+  message: string
 ) => {
-  Alert.alert(title, message, buttons || [{ text: 'OK' }]);
+  NotificationService.error(message, title);
 };
 
 /**

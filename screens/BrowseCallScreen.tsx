@@ -255,7 +255,7 @@ const BrowseCallScreen = ({ navigation }: any) => {
           overflow: 'hidden',
         }
       ]}>
-        <StatusBar style="dark" translucent backgroundColor="transparent" />
+        <StatusBar style={sidebarVisible ? "light" : "dark"} translucent backgroundColor="transparent" />
         <SafeAreaView style={styles.safeArea} edges={['bottom']}>
           {/* Sticky Header and Filter Section */}
           <Animated.View style={[styles.stickyHeader, {

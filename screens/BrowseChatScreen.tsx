@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import NotificationService from '../src/utils/notificationService';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
@@ -55,7 +56,9 @@ import { useResponsiveLayout } from '../src/utils/responsive';
 import { useBrowseChatData } from '../src/hooks/useBrowseChatData';
 import { useAuth } from '../src/contexts/AuthContext';
 import Sidebar from '../components/Sidebar';
+import InsufficientBalanceModal from '../components/chat/InsufficientBalanceModal';
 import { Astrologer } from '../src/types/api.types';
+import { chatService } from '../src/services';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -94,6 +97,15 @@ const BrowseChatScreen = ({ navigation }: any) => {
   const [activeTab, setActiveTab] = useState(1); // Chat tab active
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [loadingAstrologerId, setLoadingAstrologerId] = useState<string | null>(null);
+  const [insufficientBalanceData, setInsufficientBalanceData] = useState({
+    visible: false,
+    astrologer: null as Astrologer | null,
+    shortfall: 0,
+    minimumRequired: 0,
+    currentBalance: 0,
+    pricePerMinute: 0,
+  });
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -237,6 +249,62 @@ const BrowseChatScreen = ({ navigation }: any) => {
     }
   };
 
+  // Handle start chat with balance validation
+  const handleStartChat = async (astrologer: Astrologer) => {
+    try {
+      setLoadingAstrologerId(astrologer.id);
+
+      // Step 1: Validate balance
+      const validationData = await chatService.validateBalance(astrologer.id);
+
+      // Step 2: Handle insufficient balance
+      if (!validationData.canStartChat) {
+        setInsufficientBalanceData({
+          visible: true,
+          astrologer: astrologer,
+          shortfall: validationData.shortfall || 0,
+          minimumRequired: validationData.minimumRequired || 0,
+          currentBalance: validationData.currentBalance || 0,
+          pricePerMinute: validationData.pricePerMinute || astrologer.pricePerMinute,
+        });
+        return;
+      }
+
+      // Step 3: Start session
+      const session = await chatService.startSession({
+        astrologerId: astrologer.id,
+        sessionType: 'chat',
+      });
+
+      // Step 4: Navigate to chat interface
+      navigation.navigate('ChatInterface', {
+        session: session,
+        astrologer: astrologer,
+      });
+    } catch (error: any) {
+      console.error('Error starting chat:', error);
+
+      // Handle specific error for insufficient balance
+      if (error.response?.data?.error?.code === 'INSUFFICIENT_BALANCE') {
+        setInsufficientBalanceData({
+          visible: true,
+          astrologer: astrologer,
+          shortfall: error.response.data.data?.shortfall || 0,
+          minimumRequired: error.response.data.data?.minimumRequired || 0,
+          currentBalance: error.response.data.data?.currentBalance || 0,
+          pricePerMinute: error.response.data.data?.pricePerMinute || astrologer.pricePerMinute,
+        });
+      } else {
+        NotificationService.error(
+          error.response?.data?.error?.message || 'Failed to start chat. Please try again.',
+          'Error'
+        );
+      }
+    } finally {
+      setLoadingAstrologerId(null);
+    }
+  };
+
   if (!fontsLoaded) {
     return null;
   }
@@ -255,7 +323,7 @@ const BrowseChatScreen = ({ navigation }: any) => {
           overflow: 'hidden',
         }
       ]}>
-        <StatusBar style="dark" translucent backgroundColor="transparent" />
+        <StatusBar style={sidebarVisible ? "light" : "dark"} translucent backgroundColor="transparent" />
         <SafeAreaView style={styles.safeArea} edges={['bottom']}>
           {/* Sticky Header and Filter Section */}
           <Animated.View style={[styles.stickyHeader, {
@@ -450,6 +518,8 @@ const BrowseChatScreen = ({ navigation }: any) => {
                       scale={scale}
                       animValue={cardsAnim[index] || new Animated.Value(1)}
                       isLast={index === astrologers.length - 1}
+                      onStartChat={handleStartChat}
+                      loadingAstrologerId={loadingAstrologerId}
                     />
                   ))}
                 </>
@@ -509,12 +579,37 @@ const BrowseChatScreen = ({ navigation }: any) => {
         visible={sidebarVisible}
         onClose={() => setSidebarVisible(false)}
       />
+
+      {/* Insufficient Balance Modal */}
+      <InsufficientBalanceModal
+        visible={insufficientBalanceData.visible}
+        shortfall={insufficientBalanceData.shortfall}
+        minimumRequired={insufficientBalanceData.minimumRequired}
+        currentBalance={insufficientBalanceData.currentBalance}
+        pricePerMinute={insufficientBalanceData.pricePerMinute}
+        onRecharge={() => {
+          setInsufficientBalanceData({ ...insufficientBalanceData, visible: false });
+          // TODO: Navigate to wallet/recharge screen when implemented
+          NotificationService.info('Wallet recharge screen will be implemented soon.', 'Recharge');
+        }}
+        onCancel={() => {
+          setInsufficientBalanceData({ ...insufficientBalanceData, visible: false });
+        }}
+      />
     </>
   );
 };
 
 // Astrologer Card Component
-const AstrologerCard = ({ astrologer, index, scale, animValue, isLast }: any) => {
+const AstrologerCard = ({
+  astrologer,
+  index,
+  scale,
+  animValue,
+  isLast,
+  onStartChat,
+  loadingAstrologerId
+}: any) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
 
   const onPressIn = () => {
@@ -647,9 +742,13 @@ const AstrologerCard = ({ astrologer, index, scale, animValue, isLast }: any) =>
               paddingVertical: 8 * scale,
               borderRadius: 25 * scale
             }]}
-            onPress={() => console.log('Chat with', astrologer.name)}
+            onPress={() => onStartChat(astrologer)}
           >
-            <Text style={[styles.chatButtonText, { fontSize: 18 * scale }]}>Chat</Text>
+            {loadingAstrologerId === astrologer.id ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={[styles.chatButtonText, { fontSize: 18 * scale }]}>Chat</Text>
+            )}
           </AnimatedButton>
         </View>
       </TouchableOpacity>

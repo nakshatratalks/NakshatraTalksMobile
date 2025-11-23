@@ -9,7 +9,9 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { NotifierWrapper } from 'react-native-notifier';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { ConfirmationModalProvider } from './src/utils/notificationService';
 
 // Screens
 import WelcomeScreen from './screens/WelcomeScreen';
@@ -17,6 +19,7 @@ import SignInScreen from './screens/SignInScreen';
 import HomeScreen from './screens/HomeScreen';
 import BrowseChatScreen from './screens/BrowseChatScreen';
 import BrowseCallScreen from './screens/BrowseCallScreen';
+import ChatInterfaceScreen from './screens/ChatInterfaceScreen';
 
 // Create Navigator
 const Stack = createNativeStackNavigator();
@@ -89,6 +92,14 @@ const Navigation = () => {
                 animationDuration: 200,
               }}
             />
+            <Stack.Screen
+              name="ChatInterface"
+              component={ChatInterfaceScreen}
+              options={{
+                animation: 'slide_from_right',
+                animationDuration: 300,
+              }}
+            />
           </>
         )}
       </Stack.Navigator>
@@ -115,7 +126,11 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <Navigation />
+          <NotifierWrapper>
+            <ConfirmationModalProvider>
+              <Navigation />
+            </ConfirmationModalProvider>
+          </NotifierWrapper>
         </AuthProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>

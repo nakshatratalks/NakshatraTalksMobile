@@ -57,6 +57,7 @@ import { useResponsiveLayout } from '../src/utils/responsive';
 import { useHomeData } from '../src/hooks/useHomeData';
 import { useAuth } from '../src/contexts/AuthContext';
 import { feedbackService } from '../src/services';
+import NotificationService from '../src/utils/notificationService';
 import { handleApiError } from '../src/utils/errorHandler';
 import Sidebar from '../components/Sidebar';
 
@@ -135,14 +136,10 @@ const HomeScreen = ({ navigation }: any) => {
   const [searchFocused, setSearchFocused] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
   const [errors, setErrors] = useState({ name: '', email: '', comments: '' });
   const [focusedField, setFocusedField] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
-
-  // Toast notification animation
-  const toastAnim = useRef(new Animated.Value(-100)).current;
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -250,25 +247,6 @@ const HomeScreen = ({ navigation }: any) => {
     }).start();
   };
 
-  // Toast notification animation
-  useEffect(() => {
-    if (submitSuccess) {
-      // Slide down from top
-      Animated.spring(toastAnim, {
-        toValue: 0,
-        friction: 8,
-        tension: 40,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      // Slide up out of view
-      Animated.timing(toastAnim, {
-        toValue: -100,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [submitSuccess]);
 
   // 3D Sidebar animation effect with content fade
   useEffect(() => {
@@ -377,18 +355,15 @@ const HomeScreen = ({ navigation }: any) => {
       });
 
       setIsSubmitting(false);
-      setSubmitSuccess(true);
+
+      // Show success notification
+      NotificationService.success('Feedback submitted successfully!');
 
       // Clear form
       setName('');
       setEmail('');
       setComments('');
       setErrors({ name: '', email: '', comments: '' });
-
-      // Reset success message after 3 seconds
-      setTimeout(() => {
-        setSubmitSuccess(false);
-      }, 3000);
     } catch (error: any) {
       console.error('Feedback submission error:', error);
       setIsSubmitting(false);
@@ -416,26 +391,9 @@ const HomeScreen = ({ navigation }: any) => {
         }
       ]}>
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="dark" />
+        <StatusBar style={sidebarVisible ? "light" : "dark"} />
 
-        {/* Toast Notification */}
-        {submitSuccess && (
-          <Animated.View
-            style={[
-              styles.toastNotification,
-              {
-                transform: [{ translateY: toastAnim }],
-              },
-            ]}
-          >
-            <CheckCircle size={22} color="#10B981" strokeWidth={2.5} />
-            <Text style={styles.toastText}>
-              Feedback submitted successfully!
-            </Text>
-          </Animated.View>
-        )}
-
-            <Animated.ScrollView
+        <Animated.ScrollView
         style={[styles.container, {
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }],
@@ -1598,34 +1556,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: '#E5E5E5',
-  },
-  toastNotification: {
-    position: 'absolute',
-    top: 10,
-    left: 20,
-    right: 20,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    zIndex: 1000,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: '#10B981',
-  },
-  toastText: {
-    fontFamily: 'Lexend_500Medium',
-    fontSize: 14,
-    color: '#059669',
-    flex: 1,
-    letterSpacing: -0.2,
   },
   inputGroup: {
     width: '100%',

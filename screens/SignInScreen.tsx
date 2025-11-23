@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, Image, TouchableOpacity, TextInput, StyleSheet, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
@@ -20,6 +20,7 @@ import { useResponsiveLayout } from '../src/utils/responsive';
 import { useAuth } from '../src/contexts/AuthContext';
 import { validatePhone, formatPhoneToE164, getPhoneValidationError } from '../src/utils/phoneValidator';
 import { handleApiError } from '../src/utils/errorHandler';
+import NotificationService from '../src/utils/notificationService';
 
 const BASE_WIDTH = 384;
 
@@ -63,7 +64,7 @@ const SignInScreen = ({ onSuccess }: SignInScreenProps) => {
       const validationError = getPhoneValidationError(formattedPhone);
       if (validationError) {
         setErrorMessage(validationError);
-        Alert.alert('Invalid Phone', validationError);
+        NotificationService.error(validationError, 'Invalid Phone');
         return;
       }
 
@@ -71,7 +72,7 @@ const SignInScreen = ({ onSuccess }: SignInScreenProps) => {
       await sendOTP(formattedPhone);
 
       setOtpSent(true);
-      Alert.alert('OTP Sent', 'Please check your phone for the OTP code.');
+      NotificationService.success('Please check your phone for the OTP code.', 'OTP Sent');
     } catch (error: any) {
       console.error('Send OTP error:', error);
       handleApiError(error);
@@ -90,7 +91,7 @@ const SignInScreen = ({ onSuccess }: SignInScreenProps) => {
 
       if (!otp || otp.length !== 6) {
         setErrorMessage('Please enter a valid 6-digit OTP');
-        Alert.alert('Invalid OTP', 'Please enter a valid 6-digit OTP');
+        NotificationService.error('Please enter a valid 6-digit OTP', 'Invalid OTP');
         return;
       }
 
@@ -102,7 +103,7 @@ const SignInScreen = ({ onSuccess }: SignInScreenProps) => {
 
       await login(formattedPhone, otp);
 
-      Alert.alert('Success', 'Login successful!');
+      NotificationService.success('Login successful!', 'Success');
       if (onSuccess) {
         onSuccess();
       }
