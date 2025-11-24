@@ -41,6 +41,7 @@ import { useAuth } from '../src/contexts/AuthContext';
 import NotificationService from '../src/utils/notificationService';
 import Sidebar from '../components/Sidebar';
 import { BottomNavBar } from '../components/BottomNavBar';
+import { SkeletonCircle, SkeletonBox, SkeletonText } from '../components/skeleton';
 
 const ProfileScreen = ({ navigation }: any) => {
   // Hooks
@@ -448,19 +449,11 @@ const ProfileScreen = ({ navigation }: any) => {
 
 // Skeleton Placeholder Component
 const SkeletonPlaceholder = ({ width, height, borderRadius = 8, style }: any) => {
-  return (
-    <View
-      style={[
-        {
-          width,
-          height,
-          borderRadius,
-          backgroundColor: '#E0E0E0',
-        },
-        style,
-      ]}
-    />
-  );
+  if (borderRadius && borderRadius >= (typeof height === 'number' ? height / 2 : 0)) {
+    // It's a circle
+    return <SkeletonCircle size={typeof width === 'number' ? width : 0} style={style} />;
+  }
+  return <SkeletonBox width={width} height={height} borderRadius={borderRadius} style={style} />;
 };
 
 const styles = StyleSheet.create({

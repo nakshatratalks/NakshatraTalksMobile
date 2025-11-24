@@ -39,6 +39,7 @@ import NotificationService from '../src/utils/notificationService';
 import { handleApiError } from '../src/utils/errorHandler';
 import { io, Socket } from 'socket.io-client';
 import { API_CONFIG } from '../src/config/api.config';
+import { SkeletonBox } from '../components/skeleton';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -416,7 +417,7 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
   if (!fontsLoaded || loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FFCF0D" />
+        <SkeletonBox width="100%" height="100%" borderRadius={0} />
       </View>
     );
   }

@@ -61,6 +61,7 @@ import NotificationService from '../src/utils/notificationService';
 import { handleApiError } from '../src/utils/errorHandler';
 import Sidebar from '../components/Sidebar';
 import { BottomNavBar } from '../components/BottomNavBar';
+import { LiveSessionCardSkeleton, TopRatedCardSkeleton } from '../components/skeleton';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -592,7 +593,26 @@ const HomeScreen = ({ navigation }: any) => {
         ))}
 
         {/* Live Sessions Section - Shows astrologers currently streaming live */}
-        {displayLiveSessions.length > 0 && (
+        {(dataLoading && displayLiveSessions.length === 0) ? (
+          <View style={[styles.section, { marginBottom: 30 * scale }]}>
+            <View style={[styles.sectionHeader, { paddingHorizontal: 20 * scale, marginBottom: 16 * scale }]}>
+              <Text style={[styles.sectionTitle, { fontSize: 16 * scale }]}>Live Astrologers</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20 * scale }}
+            >
+              {[1, 2, 3, 4].map((index) => (
+                <LiveSessionCardSkeleton
+                  key={index}
+                  scale={scale}
+                  isLast={index === 4}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        ) : displayLiveSessions.length > 0 ? (
           <View style={[styles.section, { marginBottom: 30 * scale }]}>
             <View style={[styles.sectionHeader, { paddingHorizontal: 20 * scale, marginBottom: 16 * scale }]}>
               <Text style={[styles.sectionTitle, { fontSize: 16 * scale }]}>Live Astrologers</Text>
@@ -623,7 +643,7 @@ const HomeScreen = ({ navigation }: any) => {
               ))}
             </ScrollView>
           </View>
-        )}
+        ) : null}
 
         {/* Top Rated Astrologers Section */}
         <View style={[styles.section, { marginBottom: 30 * scale, paddingHorizontal: 20 * scale }]}>
@@ -634,16 +654,27 @@ const HomeScreen = ({ navigation }: any) => {
             </TouchableOpacity>
           </View>
 
-          {displayTopRatedAstrologers.map((astrologer, index) => (
-            <TopRatedCard
-              key={astrologer.id}
-              astrologer={astrologer}
-              index={index}
-              scale={scale}
-              animValue={topRatedCardsAnim[index]}
-              isLast={index === topRatedAstrologers.length - 1}
-            />
-          ))}
+          {(dataLoading && displayTopRatedAstrologers.length === 0) ? (
+            <>
+              {[1, 2, 3].map((index) => (
+                <TopRatedCardSkeleton
+                  key={index}
+                  scale={scale}
+                />
+              ))}
+            </>
+          ) : (
+            displayTopRatedAstrologers.map((astrologer, index) => (
+              <TopRatedCard
+                key={astrologer.id}
+                astrologer={astrologer}
+                index={index}
+                scale={scale}
+                animValue={topRatedCardsAnim[index]}
+                isLast={index === topRatedAstrologers.length - 1}
+              />
+            ))
+          )}
         </View>
 
         {/* Feedback Form Section */}

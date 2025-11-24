@@ -60,6 +60,7 @@ import { BottomNavBar } from '../components/BottomNavBar';
 import InsufficientBalanceModal from '../components/chat/InsufficientBalanceModal';
 import { Astrologer } from '../src/types/api.types';
 import { chatService } from '../src/services';
+import { AstrologerCardSkeleton } from '../components/skeleton';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -493,12 +494,14 @@ const BrowseChatScreen = ({ navigation }: any) => {
               paddingBottom: 100 * scale
             }]}>
               {dataLoading && astrologers.length === 0 ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#2930A6" />
-                  <Text style={[styles.loadingText, { fontSize: 14 * scale, marginTop: 12 * scale }]}>
-                    Finding the best astrologers...
-                  </Text>
-                </View>
+                <>
+                  {[1, 2, 3, 4, 5].map((index) => (
+                    <AstrologerCardSkeleton
+                      key={index}
+                      scale={scale}
+                    />
+                  ))}
+                </>
               ) : astrologers.length === 0 ? (
                 <View style={styles.emptyContainer}>
                   <Sparkles size={48 * scale} color="#FFCF0D" />
