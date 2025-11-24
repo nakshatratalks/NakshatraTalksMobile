@@ -164,32 +164,13 @@ const ProfileScreen = ({ navigation }: any) => {
     }
   };
 
-  // Loading state
-  if (!fontsLoaded || loading) {
+  // Wait only for fonts, not for data
+  if (!fontsLoaded) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2930A6" />
       </View>
     );
-  }
-
-  // Error state
-  if (error && !userProfile) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="dark" />
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity onPress={refetch} style={styles.retryButton}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!userProfile) {
-    return null;
   }
 
   // Format phone number
@@ -207,7 +188,7 @@ const ProfileScreen = ({ navigation }: any) => {
     };
   };
 
-  const { countryCode, number: formattedNumber } = formatPhoneNumber(userProfile.phone);
+  const { countryCode, number: formattedNumber } = userProfile ? formatPhoneNumber(userProfile.phone) : { countryCode: '+91', number: '' };
 
   // Format date
   const formatDate = (dateString: string | null | undefined) => {
@@ -240,19 +221,36 @@ const ProfileScreen = ({ navigation }: any) => {
             </Text>
 
             {/* Profile Image */}
-            <Image
-              source={
-                userProfile.profileImage
-                  ? { uri: userProfile.profileImage }
-                  : require('../assets/images/astrologer1.png')
-              }
-              style={[styles.profileImage, { width: 90 * scale, height: 90 * scale, borderRadius: 45 * scale }]}
-            />
+            {loading || !userProfile ? (
+              <SkeletonPlaceholder
+                width={90 * scale}
+                height={90 * scale}
+                borderRadius={45 * scale}
+                style={{ marginTop: 10 * scale }}
+              />
+            ) : (
+              <Image
+                source={
+                  userProfile.profileImage
+                    ? { uri: userProfile.profileImage }
+                    : require('../assets/images/astrologer1.png')
+                }
+                style={[styles.profileImage, { width: 90 * scale, height: 90 * scale, borderRadius: 45 * scale }]}
+              />
+            )}
 
             {/* User Name */}
-            <Text style={[styles.userName, { fontSize: 16 * scale, marginTop: 10 * scale }]}>
-              {userProfile.name || 'User'}
-            </Text>
+            {loading || !userProfile ? (
+              <SkeletonPlaceholder
+                width={120 * scale}
+                height={20 * scale}
+                style={{ marginTop: 10 * scale }}
+              />
+            ) : (
+              <Text style={[styles.userName, { fontSize: 16 * scale, marginTop: 10 * scale }]}>
+                {userProfile.name || 'User'}
+              </Text>
+            )}
           </View>
 
           {/* Right Container - White Background with Contact Information */}
@@ -274,33 +272,47 @@ const ProfileScreen = ({ navigation }: any) => {
 
             {/* Contact Info */}
             <View style={[styles.contactInfo, { marginTop: 85 * scale, paddingRight: 10 * scale }]}>
-              {/* Phone Number */}
-              <View style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
-                <Text style={[styles.infoLabel, { fontSize: 13 * scale }]}>Phone Number</Text>
-                <Text style={[styles.infoValue, { fontSize: 12 * scale }]}>
-                  {countryCode} {formattedNumber}
-                </Text>
-              </View>
+              {loading || !userProfile ? (
+                <>
+                  {/* Skeleton for contact info */}
+                  {[1, 2, 3, 4].map((item) => (
+                    <View key={item} style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
+                      <SkeletonPlaceholder width={80 * scale} height={12 * scale} style={{ marginBottom: 4 * scale }} />
+                      <SkeletonPlaceholder width={100 * scale} height={10 * scale} />
+                    </View>
+                  ))}
+                </>
+              ) : (
+                <>
+                  {/* Phone Number */}
+                  <View style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
+                    <Text style={[styles.infoLabel, { fontSize: 13 * scale }]}>Phone Number</Text>
+                    <Text style={[styles.infoValue, { fontSize: 12 * scale }]}>
+                      {countryCode} {formattedNumber}
+                    </Text>
+                  </View>
 
-              {/* City/Town */}
-              <View style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
-                <Text style={[styles.infoLabel, { fontSize: 13 * scale }]}>City/Town</Text>
-                <Text style={[styles.infoValue, { fontSize: 12 * scale }]}>Chennai</Text>
-              </View>
+                  {/* City/Town */}
+                  <View style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
+                    <Text style={[styles.infoLabel, { fontSize: 13 * scale }]}>City/Town</Text>
+                    <Text style={[styles.infoValue, { fontSize: 12 * scale }]}>Chennai</Text>
+                  </View>
 
-              {/* Address */}
-              <View style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
-                <Text style={[styles.infoLabel, { fontSize: 13 * scale }]}>Address</Text>
-                <Text style={[styles.infoValue, { fontSize: 12 * scale }]}>
-                  No 45, abc nagar, 1st street
-                </Text>
-              </View>
+                  {/* Address */}
+                  <View style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
+                    <Text style={[styles.infoLabel, { fontSize: 13 * scale }]}>Address</Text>
+                    <Text style={[styles.infoValue, { fontSize: 12 * scale }]}>
+                      No 45, abc nagar, 1st street
+                    </Text>
+                  </View>
 
-              {/* Pincode */}
-              <View style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
-                <Text style={[styles.infoLabel, { fontSize: 13 * scale }]}>Pincode</Text>
-                <Text style={[styles.infoValue, { fontSize: 12 * scale }]}>600 026</Text>
-              </View>
+                  {/* Pincode */}
+                  <View style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
+                    <Text style={[styles.infoLabel, { fontSize: 13 * scale }]}>Pincode</Text>
+                    <Text style={[styles.infoValue, { fontSize: 12 * scale }]}>600 026</Text>
+                  </View>
+                </>
+              )}
             </View>
           </View>
         </View>
@@ -311,10 +323,22 @@ const ProfileScreen = ({ navigation }: any) => {
           contentContainerStyle={[styles.birthDetailsSection, { paddingHorizontal: 20 * scale, paddingTop: 15 * scale, paddingBottom: 100 * scale }]}
           showsVerticalScrollIndicator={false}
         >
-            {/* Date of Birth */}
-            <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { fontSize: 16 * scale }]}>Date of Birth</Text>
-              {isEditing ? (
+          {loading || !userProfile ? (
+            <>
+              {/* Skeleton for birth details */}
+              {[1, 2, 3, 4].map((item) => (
+                <View key={item} style={[styles.formGroup, { marginTop: item > 1 ? 20 * scale : 0 }]}>
+                  <SkeletonPlaceholder width={120 * scale} height={16 * scale} style={{ marginBottom: 12 * scale }} />
+                  <SkeletonPlaceholder width={'100%'} height={37 * scale} borderRadius={12 * scale} />
+                </View>
+              ))}
+            </>
+          ) : (
+            <>
+              {/* Date of Birth */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.formLabel, { fontSize: 16 * scale }]}>Date of Birth</Text>
+                {isEditing ? (
                 <View style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}>
                   <Calendar size={24 * scale} color="#FFCF0D" />
                   <TextInput
@@ -408,16 +432,34 @@ const ProfileScreen = ({ navigation }: any) => {
                 </View>
               )}
             </View>
-          </ScrollView>
+            </>
+          )}
+        </ScrollView>
       </Animated.View>
 
       {/* Bottom Navigation */}
       <BottomNavBar
         activeTab={activeTab}
         navigation={navigation}
-        fadeAnim={fadeAnim}
       />
     </View>
+  );
+};
+
+// Skeleton Placeholder Component
+const SkeletonPlaceholder = ({ width, height, borderRadius = 8, style }: any) => {
+  return (
+    <View
+      style={[
+        {
+          width,
+          height,
+          borderRadius,
+          backgroundColor: '#E0E0E0',
+        },
+        style,
+      ]}
+    />
   );
 };
 

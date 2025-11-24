@@ -797,7 +797,6 @@ const HomeScreen = ({ navigation }: any) => {
       <BottomNavBar
         activeTab={activeTab}
         navigation={navigation}
-        fadeAnim={fadeAnim}
       />
       </SafeAreaView>
       </Animated.View>
