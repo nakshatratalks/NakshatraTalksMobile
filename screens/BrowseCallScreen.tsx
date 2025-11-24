@@ -55,6 +55,7 @@ import { useResponsiveLayout } from '../src/utils/responsive';
 import { useBrowseCallData } from '../src/hooks/useBrowseCallData';
 import { useAuth } from '../src/contexts/AuthContext';
 import Sidebar from '../components/Sidebar';
+import { BottomNavBar } from '../components/BottomNavBar';
 import { Astrologer } from '../src/types/api.types';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -458,49 +459,11 @@ const BrowseCallScreen = ({ navigation }: any) => {
           </Animated.ScrollView>
 
           {/* Bottom Navigation */}
-          <Animated.View style={[styles.bottomNav, {
-            opacity: fadeAnim,
-            height: 61 * scale,
-            borderRadius: 50 * scale,
-            paddingHorizontal: 48 * scale
-          }]}>
-            <NavItem
-              icon={Home}
-              isActive={activeTab === 0}
-              onPress={() => {
-                setActiveTab(0);
-                navigation.navigate('Home');
-              }}
-              scale={scale}
-            />
-            <NavItem
-              icon={MessageSquare}
-              isActive={activeTab === 1}
-              onPress={() => {
-                setActiveTab(1);
-                navigation.navigate('BrowseChat');
-              }}
-              scale={scale}
-            />
-            <NavItem
-              icon={Video}
-              isActive={activeTab === 2}
-              onPress={() => setActiveTab(2)}
-              scale={scale}
-            />
-            <NavItem
-              icon={Phone}
-              isActive={activeTab === 3}
-              onPress={() => setActiveTab(3)}
-              scale={scale}
-            />
-            <NavItem
-              icon={UserCircle2}
-              isActive={activeTab === 4}
-              onPress={() => setActiveTab(4)}
-              scale={scale}
-            />
-          </Animated.View>
+          <BottomNavBar
+            activeTab={activeTab}
+            navigation={navigation}
+            fadeAnim={fadeAnim}
+          />
         </SafeAreaView>
       </Animated.View>
 
@@ -710,63 +673,6 @@ const FilterChip = ({ label, icon: Icon, isActive, isFilterButton, onPress, scal
         >
           {label}
         </Text>
-      </Animated.View>
-    </TouchableOpacity>
-  );
-};
-
-// Nav Item Component with active indicator
-const NavItem = ({ icon: Icon, isActive, onPress, scale }: any) => {
-  const scaleValue = useRef(new Animated.Value(1)).current;
-  const indicatorScale = useRef(new Animated.Value(isActive ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.spring(indicatorScale, {
-      toValue: isActive ? 1 : 0,
-      friction: 5,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
-  }, [isActive]);
-
-  const onPressIn = () => {
-    Animated.spring(scaleValue, {
-      toValue: 0.85,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const onPressOut = () => {
-    Animated.spring(scaleValue, {
-      toValue: 1,
-      friction: 3,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  return (
-    <TouchableOpacity
-      style={styles.navItem}
-      onPress={onPress}
-      onPressIn={onPressIn}
-      onPressOut={onPressOut}
-      activeOpacity={1}
-    >
-      <Animated.View style={{ transform: [{ scale: scaleValue }] }}>
-        <Icon
-          size={24 * scale}
-          color={isActive ? '#2930A6' : '#666666'}
-          fill={isActive ? '#2930A6' : 'transparent'}
-        />
-        <Animated.View
-          style={[
-            styles.navIndicator,
-            {
-              transform: [{ scale: indicatorScale }],
-            },
-          ]}
-        />
       </Animated.View>
     </TouchableOpacity>
   );
@@ -1104,38 +1010,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#FFFFFF',
     letterSpacing: -0.54,
-  },
-  bottomNav: {
-    position: 'absolute',
-    bottom: 12,
-    left: 15,
-    right: 15,
-    backgroundColor: '#FFCF0D',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderRadius: 50,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 10,
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
-  },
-  navItem: {
-    padding: 8,
-    position: 'relative',
-  },
-  navIndicator: {
-    position: 'absolute',
-    bottom: -12,
-    left: '50%',
-    marginLeft: -3,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#2930A6',
   },
 });
 

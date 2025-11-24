@@ -21,6 +21,7 @@ import BrowseChatScreen from './screens/BrowseChatScreen';
 import BrowseCallScreen from './screens/BrowseCallScreen';
 import ChatInterfaceScreen from './screens/ChatInterfaceScreen';
 import LiveSessionScreen from './screens/LiveSessionScreen';
+import ProfileScreen from './screens/ProfileScreen';
 
 // Create Navigator
 const Stack = createNativeStackNavigator();
@@ -108,6 +109,14 @@ const Navigation = () => {
                 animation: 'fade',
                 animationDuration: 200,
                 presentation: 'fullScreenModal',
+              }}
+            />
+            <Stack.Screen
+              name="Profile"
+              component={ProfileScreen}
+              options={{
+                animation: 'fade',
+                animationDuration: 200,
               }}
             />
           </>
