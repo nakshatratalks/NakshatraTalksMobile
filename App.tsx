@@ -22,6 +22,7 @@ import BrowseCallScreen from './screens/BrowseCallScreen';
 import ChatInterfaceScreen from './screens/ChatInterfaceScreen';
 import LiveSessionScreen from './screens/LiveSessionScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import AstrologerDetailsScreen from './screens/AstrologerDetailsScreen';
 
 // Create Navigator
 const Stack = createNativeStackNavigator();
@@ -117,6 +118,14 @@ const Navigation = () => {
               options={{
                 animation: 'fade',
                 animationDuration: 200,
+              }}
+            />
+            <Stack.Screen
+              name="AstrologerDetails"
+              component={AstrologerDetailsScreen}
+              options={{
+                animation: 'slide_from_right',
+                animationDuration: 300,
               }}
             />
           </>

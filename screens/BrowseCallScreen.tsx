@@ -454,6 +454,7 @@ const BrowseCallScreen = ({ navigation }: any) => {
                       scale={scale}
                       animValue={cardsAnim[index] || new Animated.Value(1)}
                       isLast={index === astrologers.length - 1}
+                      navigation={navigation}
                     />
                   ))}
                 </>
@@ -479,7 +480,7 @@ const BrowseCallScreen = ({ navigation }: any) => {
 };
 
 // Astrologer Card Component
-const AstrologerCard = ({ astrologer, index, scale, animValue, isLast }: any) => {
+const AstrologerCard = ({ astrologer, index, scale, animValue, isLast, navigation }: any) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
 
   const onPressIn = () => {
@@ -496,6 +497,10 @@ const AstrologerCard = ({ astrologer, index, scale, animValue, isLast }: any) =>
       tension: 40,
       useNativeDriver: true,
     }).start();
+  };
+
+  const handlePress = () => {
+    navigation.navigate('AstrologerDetails', { astrologerId: astrologer.id });
   };
 
   return (
@@ -521,6 +526,7 @@ const AstrologerCard = ({ astrologer, index, scale, animValue, isLast }: any) =>
       ]}
     >
       <TouchableOpacity
+        onPress={handlePress}
         onPressIn={onPressIn}
         onPressOut={onPressOut}
         activeOpacity={1}

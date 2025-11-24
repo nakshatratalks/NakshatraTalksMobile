@@ -21,7 +21,8 @@
       "Bash(npm start -- --reset-cache)",
       "Bash(cat:*)",
       "Bash(powershell:*)",
-      "Bash(./gradlew:*)"
+      "Bash(./gradlew:*)",
+      "Bash(move:*)"
     ],
     "deny": [],
     "ask": []

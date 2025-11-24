@@ -672,6 +672,7 @@ const HomeScreen = ({ navigation }: any) => {
                 scale={scale}
                 animValue={topRatedCardsAnim[index]}
                 isLast={index === topRatedAstrologers.length - 1}
+                navigation={navigation}
               />
             ))
           )}
@@ -923,7 +924,7 @@ const LiveSessionCard = ({ session, index, scale, animValue, isLast, navigation 
 };
 
 // Top Rated Card Component with enhanced design
-const TopRatedCard = ({ astrologer, index, scale, animValue, isLast }: any) => {
+const TopRatedCard = ({ astrologer, index, scale, animValue, isLast, navigation }: any) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
   const defaultAnimValue = useRef(new Animated.Value(1)).current;
   const safeAnimValue = animValue || defaultAnimValue;
@@ -942,6 +943,10 @@ const TopRatedCard = ({ astrologer, index, scale, animValue, isLast }: any) => {
       tension: 40,
       useNativeDriver: true,
     }).start();
+  };
+
+  const handlePress = () => {
+    navigation.navigate('AstrologerDetails', { astrologerId: astrologer.id });
   };
 
   return (
@@ -967,6 +972,7 @@ const TopRatedCard = ({ astrologer, index, scale, animValue, isLast }: any) => {
       ]}
     >
       <TouchableOpacity
+        onPress={handlePress}
         onPressIn={onPressIn}
         onPressOut={onPressOut}
         activeOpacity={1}

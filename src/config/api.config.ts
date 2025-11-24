@@ -1,6 +1,6 @@
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: 'https://api.nakshatratalks.com',
+  BASE_URL: 'https://api.nakshatratalks.com', // Production API URL (fixed)
   TIMEOUT: 30000, // 30 seconds
   HEADERS: {
     'Content-Type': 'application/json',
@@ -29,15 +29,28 @@ export const API_ENDPOINTS = {
     PROFILE: '/api/v1/users/profile',
   },
 
-  // Astrologers
+  // Astrologers (API v2.0.0)
   ASTROLOGERS: {
     LIVE: '/api/v1/astrologers/live',
     TOP_RATED: '/api/v1/astrologers/top-rated',
     DETAILS: (id: string) => `/api/v1/astrologers/${id}`,
-    SEARCH: '/api/v1/search/astrologers',
+    SEARCH: '/api/v1/astrologers/search', // Updated endpoint for advanced search
+    AVAILABLE: '/api/v1/astrologers/available', // Get available astrologers
     REVIEWS: (id: string) => `/api/v1/astrologers/${id}/reviews`,
     FOLLOW: (id: string) => `/api/v1/astrologers/${id}/follow`,
     UNFOLLOW: (id: string) => `/api/v1/astrologers/${id}/unfollow`,
+    // Photo Gallery (API v2.0.0)
+    PHOTOS: (id: string) => `/api/v1/astrologers/${id}/photos`,
+    PHOTO_DELETE: (id: string, photoId: string) => `/api/v1/astrologers/${id}/photos/${photoId}`,
+    PHOTO_REORDER: (id: string) => `/api/v1/astrologers/${id}/photos/reorder`,
+    // Statistics (API v2.0.0)
+    STATS: (id: string) => `/api/v1/astrologers/${id}/stats`,
+    // Availability Management (API v2.0.0)
+    TOGGLE_AVAILABILITY: (id: string) => `/api/v1/astrologers/${id}/toggle-availability`,
+    TOGGLE_CHAT_AVAILABILITY: (id: string) => `/api/v1/astrologers/${id}/toggle-chat-availability`,
+    TOGGLE_CALL_AVAILABILITY: (id: string) => `/api/v1/astrologers/${id}/toggle-call-availability`,
+    // Working Hours (API v2.0.0)
+    WORKING_HOURS: (id: string) => `/api/v1/astrologers/${id}/working-hours`,
   },
 
   // Wallet

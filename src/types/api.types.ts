@@ -83,7 +83,8 @@ export interface Astrologer {
   name: string;
   email?: string | null;
   image: string;
-  bio?: string | null;
+  description?: string | null; // Renamed from 'bio' as per API v2.0.0
+  bio?: string | null; // @deprecated - Use 'description' instead (kept for backward compatibility)
   specialization: string[];
   languages: string[];
   experience: number;
@@ -104,7 +105,8 @@ export interface Astrologer {
   nextAvailableAt?: string | null;
   status?: 'pending' | 'approved' | 'rejected' | 'inactive';
   role?: string;
-  reviews?: Review[];
+  photos?: string[]; // Optional photo gallery (API v2.0.0)
+  reviews?: Review[]; // Reviews with optional userImage (API v2.0.0)
   createdAt?: string;
   updatedAt?: string;
 }
@@ -114,6 +116,7 @@ export interface Review {
   id: string;
   userId: string;
   userName: string;
+  userImage?: string | null;
   astrologerId?: string;
   sessionId?: string;
   rating: number;

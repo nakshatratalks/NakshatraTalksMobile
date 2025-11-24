@@ -524,6 +524,7 @@ const BrowseChatScreen = ({ navigation }: any) => {
                       isLast={index === astrologers.length - 1}
                       onStartChat={handleStartChat}
                       loadingAstrologerId={loadingAstrologerId}
+                      navigation={navigation}
                     />
                   ))}
                 </>
@@ -573,7 +574,8 @@ const AstrologerCard = ({
   animValue,
   isLast,
   onStartChat,
-  loadingAstrologerId
+  loadingAstrologerId,
+  navigation
 }: any) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
 
@@ -591,6 +593,10 @@ const AstrologerCard = ({
       tension: 40,
       useNativeDriver: true,
     }).start();
+  };
+
+  const handlePress = () => {
+    navigation.navigate('AstrologerDetails', { astrologerId: astrologer.id });
   };
 
   return (
@@ -616,6 +622,7 @@ const AstrologerCard = ({
       ]}
     >
       <TouchableOpacity
+        onPress={handlePress}
         onPressIn={onPressIn}
         onPressOut={onPressOut}
         activeOpacity={1}
