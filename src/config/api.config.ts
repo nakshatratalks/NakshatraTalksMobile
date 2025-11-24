@@ -36,6 +36,8 @@ export const API_ENDPOINTS = {
     DETAILS: (id: string) => `/api/v1/astrologers/${id}`,
     SEARCH: '/api/v1/search/astrologers',
     REVIEWS: (id: string) => `/api/v1/astrologers/${id}/reviews`,
+    FOLLOW: (id: string) => `/api/v1/astrologers/${id}/follow`,
+    UNFOLLOW: (id: string) => `/api/v1/astrologers/${id}/unfollow`,
   },
 
   // Wallet
@@ -83,5 +85,21 @@ export const API_ENDPOINTS = {
     LIST: '/api/v1/notifications',
     MARK_READ: (id: string) => `/api/v1/notifications/${id}/read`,
     MARK_ALL_READ: '/api/v1/notifications/read-all',
+  },
+
+  // Live Sessions
+  LIVE_SESSIONS: {
+    LIST: '/api/v1/live-sessions',
+    DETAILS: (sessionId: string) => `/api/v1/live-sessions/${sessionId}`,
+    JOIN: (sessionId: string) => `/api/v1/live-sessions/${sessionId}/join`,
+    LEAVE: (sessionId: string) => `/api/v1/live-sessions/${sessionId}/leave`,
+    MESSAGES: (sessionId: string) => `/api/v1/live-sessions/${sessionId}/messages`,
+    SEND_MESSAGE: (sessionId: string) => `/api/v1/live-sessions/${sessionId}/messages`,
+    VIEWERS: (sessionId: string) => `/api/v1/live-sessions/${sessionId}/viewers`,
+    // Astrologer-side endpoints (for reference)
+    CREATE: '/api/v1/live-sessions',
+    UPDATE: (sessionId: string) => `/api/v1/live-sessions/${sessionId}`,
+    START: (sessionId: string) => `/api/v1/live-sessions/${sessionId}/start`,
+    END: (sessionId: string) => `/api/v1/live-sessions/${sessionId}/end`,
   },
 };

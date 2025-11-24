@@ -1,3 +1,4 @@
+$content = @'
 pluginManagement {
   repositories {
     google()
@@ -43,3 +44,7 @@ expoAutolinking.useExpoVersionCatalog()
 
 include ':app'
 includeBuild(expoAutolinking.reactNativeGradlePlugin)
+'@
+
+$content | Set-Content settings.gradle
+Write-Host "Fixed settings.gradle"

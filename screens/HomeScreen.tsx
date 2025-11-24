@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -63,30 +63,7 @@ import Sidebar from '../components/Sidebar';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-// Mock data for astrologers with actual images
-const liveAstrologers = [
-  {
-    id: 1,
-    name: 'Sivaranjani',
-    image: require('../assets/images/astrologer1.png'),
-  },
-  {
-    id: 2,
-    name: 'Adhithi',
-    image: require('../assets/images/astrologer2.png'),
-  },
-  {
-    id: 3,
-    name: 'Adhitiya',
-    image: require('../assets/images/astrologer3.png'),
-  },
-  {
-    id: 4,
-    name: 'Dronachari',
-    image: require('../assets/images/astrologer4.png'),
-  },
-];
-
+// Mock data for top rated astrologers (fallback if API fails)
 const topRatedAstrologers = [
   {
     id: 1,
@@ -110,7 +87,7 @@ const topRatedAstrologers = [
     rating: 4.6,
     calls: '2K',
     price: 27,
-    image: require('../assets/images/astrologer3.png'),
+    image: require('../assets/images/astrologer1.png'),
   },
 ];
 
@@ -118,7 +95,7 @@ const HomeScreen = ({ navigation }: any) => {
   // API Data Hook
   const {
     userProfile,
-    liveAstrologers: apiLiveAstrologers,
+    liveSessions: apiLiveSessions,
     topRatedAstrologers: apiTopRatedAstrologers,
     categories,
     banners,
@@ -150,13 +127,19 @@ const HomeScreen = ({ navigation }: any) => {
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const searchBorderAnim = useRef(new Animated.Value(0)).current;
 
-  // Use API data or fallback to mock data
-  const displayLiveAstrologers = apiLiveAstrologers.length > 0 ? apiLiveAstrologers : liveAstrologers;
+  // Use API data or fallback to mock data for top rated only (live sessions from API only)
+  const displayLiveSessions = apiLiveSessions || [];
   const displayTopRatedAstrologers = apiTopRatedAstrologers.length > 0 ? apiTopRatedAstrologers : topRatedAstrologers;
 
-  // Stagger animation values for cards
-  const liveCardsAnim = useRef(displayLiveAstrologers.map(() => new Animated.Value(0))).current;
-  const topRatedCardsAnim = useRef(displayTopRatedAstrologers.map(() => new Animated.Value(0))).current;
+  // Stagger animation values for cards - recreate when data changes
+  const liveCardsAnim = useMemo(
+    () => displayLiveSessions.map(() => new Animated.Value(0)),
+    [displayLiveSessions.length]
+  );
+  const topRatedCardsAnim = useMemo(
+    () => displayTopRatedAstrologers.map(() => new Animated.Value(0)),
+    [displayTopRatedAstrologers.length]
+  );
 
   const [fontsLoaded] = useFonts({
     Lexend_400Regular,
@@ -196,20 +179,22 @@ const HomeScreen = ({ navigation }: any) => {
         }),
       ]).start();
 
-      // Stagger animations for live astrologer cards
-      setTimeout(() => {
-        Animated.stagger(
-          100,
-          liveCardsAnim.map((anim) =>
-            Animated.spring(anim, {
-              toValue: 1,
-              friction: 7,
-              tension: 40,
-              useNativeDriver: true,
-            })
-          )
-        ).start();
-      }, 300);
+      // Stagger animations for live session cards
+      if (displayLiveSessions.length > 0) {
+        setTimeout(() => {
+          Animated.stagger(
+            100,
+            liveCardsAnim.map((anim) =>
+              Animated.spring(anim, {
+                toValue: 1,
+                friction: 7,
+                tension: 40,
+                useNativeDriver: true,
+              })
+            )
+          ).start();
+        }, 300);
+      }
 
       // Stagger animations for top rated cards
       setTimeout(() => {
@@ -605,33 +590,39 @@ const HomeScreen = ({ navigation }: any) => {
           </View>
         ))}
 
-        {/* Live Astrologers Section */}
-        <View style={[styles.section, { marginBottom: 30 * scale }]}>
-          <View style={[styles.sectionHeader, { paddingHorizontal: 20 * scale, marginBottom: 16 * scale }]}>
-            <Text style={[styles.sectionTitle, { fontSize: 16 * scale }]}>Live Astrologers</Text>
-            <TouchableOpacity activeOpacity={0.6}>
-              <Text style={[styles.viewAll, { fontSize: 10 * scale }]}>View All</Text>
-            </TouchableOpacity>
+        {/* Live Sessions Section - Shows astrologers currently streaming live */}
+        {displayLiveSessions.length > 0 && (
+          <View style={[styles.section, { marginBottom: 30 * scale }]}>
+            <View style={[styles.sectionHeader, { paddingHorizontal: 20 * scale, marginBottom: 16 * scale }]}>
+              <Text style={[styles.sectionTitle, { fontSize: 16 * scale }]}>Live Astrologers</Text>
+              <TouchableOpacity
+                activeOpacity={0.6}
+                onPress={() => navigation.navigate('LiveSession')}
+              >
+                <Text style={[styles.viewAll, { fontSize: 10 * scale }]}>View All</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20 * scale }}
+              snapToInterval={122 * scale}
+              decelerationRate="fast"
+            >
+              {displayLiveSessions.map((session, index) => (
+                <LiveSessionCard
+                  key={session.id}
+                  session={session}
+                  index={index}
+                  scale={scale}
+                  animValue={liveCardsAnim[index]}
+                  isLast={index === displayLiveSessions.length - 1}
+                  navigation={navigation}
+                />
+              ))}
+            </ScrollView>
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 20 * scale }}
-            snapToInterval={122 * scale}
-            decelerationRate="fast"
-          >
-            {displayLiveAstrologers.map((astrologer, index) => (
-              <LiveAstrologerCard
-                key={astrologer.id}
-                astrologer={astrologer}
-                index={index}
-                scale={scale}
-                animValue={liveCardsAnim[index]}
-                isLast={index === liveAstrologers.length - 1}
-              />
-            ))}
-          </ScrollView>
-        </View>
+        )}
 
         {/* Top Rated Astrologers Section */}
         <View style={[styles.section, { marginBottom: 30 * scale, paddingHorizontal: 20 * scale }]}>
@@ -826,7 +817,10 @@ const HomeScreen = ({ navigation }: any) => {
         <NavItem
           icon={Video}
           isActive={activeTab === 2}
-          onPress={() => setActiveTab(2)}
+          onPress={() => {
+            setActiveTab(2);
+            navigation.navigate('LiveSession');
+          }}
           scale={scale}
         />
         <NavItem
@@ -857,9 +851,11 @@ const HomeScreen = ({ navigation }: any) => {
   );
 };
 
-// Live Astrologer Card Component with gradient overlay
-const LiveAstrologerCard = ({ astrologer, index, scale, animValue, isLast }: any) => {
+// Live Session Card Component with gradient overlay
+const LiveSessionCard = ({ session, index, scale, animValue, isLast, navigation }: any) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
+  const defaultAnimValue = useRef(new Animated.Value(1)).current;
+  const safeAnimValue = animValue || defaultAnimValue;
 
   const onPressIn = () => {
     Animated.spring(scaleValue, {
@@ -877,10 +873,15 @@ const LiveAstrologerCard = ({ astrologer, index, scale, animValue, isLast }: any
     }).start();
   };
 
+  const handlePress = () => {
+    navigation.navigate('LiveSession', { sessionId: session.id });
+  };
+
   return (
     <TouchableOpacity
       onPressIn={onPressIn}
       onPressOut={onPressOut}
+      onPress={handlePress}
       activeOpacity={1}
     >
       <Animated.View
@@ -891,11 +892,11 @@ const LiveAstrologerCard = ({ astrologer, index, scale, animValue, isLast }: any
             height: 164 * scale,
             borderRadius: 20 * scale,
             marginRight: isLast ? 0 : 8 * scale,
-            opacity: animValue,
+            opacity: safeAnimValue,
             transform: [
               { scale: scaleValue },
               {
-                translateY: animValue.interpolate({
+                translateY: safeAnimValue.interpolate({
                   inputRange: [0, 1],
                   outputRange: [30, 0],
                 }),
@@ -905,7 +906,13 @@ const LiveAstrologerCard = ({ astrologer, index, scale, animValue, isLast }: any
         ]}
       >
         <Image
-          source={typeof astrologer.image === 'string' ? { uri: astrologer.image } : astrologer.image}
+          source={
+            session.thumbnailUrl
+              ? { uri: session.thumbnailUrl }
+              : session.astrologerImage
+              ? { uri: session.astrologerImage }
+              : require('../assets/images/astrologer3.jpg')
+          }
           style={styles.liveAstrologerImage}
           resizeMode="cover"
         />
@@ -917,8 +924,8 @@ const LiveAstrologerCard = ({ astrologer, index, scale, animValue, isLast }: any
           <View style={styles.liveDot} />
           <Text style={[styles.liveText, { fontSize: 8 * scale }]}>LIVE</Text>
         </View>
-        <Text style={[styles.liveAstrologerName, { fontSize: 16 * scale, paddingHorizontal: 6 * scale }]}>
-          {astrologer.name}
+        <Text style={[styles.liveAstrologerName, { fontSize: 16 * scale, paddingHorizontal: 6 * scale }]} numberOfLines={1}>
+          {session.astrologerName}
         </Text>
       </Animated.View>
     </TouchableOpacity>
@@ -928,6 +935,8 @@ const LiveAstrologerCard = ({ astrologer, index, scale, animValue, isLast }: any
 // Top Rated Card Component with enhanced design
 const TopRatedCard = ({ astrologer, index, scale, animValue, isLast }: any) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
+  const defaultAnimValue = useRef(new Animated.Value(1)).current;
+  const safeAnimValue = animValue || defaultAnimValue;
 
   const onPressIn = () => {
     Animated.spring(scaleValue, {
@@ -954,11 +963,11 @@ const TopRatedCard = ({ astrologer, index, scale, animValue, isLast }: any) => {
           borderRadius: 20 * scale,
           padding: 12 * scale,
           marginBottom: isLast ? 0 : 16 * scale,
-          opacity: animValue,
+          opacity: safeAnimValue,
           transform: [
             { scale: scaleValue },
             {
-              translateX: animValue.interpolate({
+              translateX: safeAnimValue.interpolate({
                 inputRange: [0, 1],
                 outputRange: [50, 0],
               }),

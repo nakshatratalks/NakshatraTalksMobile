@@ -19,7 +19,9 @@
       "Bash(npx expo prebuild:*)",
       "Bash(echo:*)",
       "Bash(npm start -- --reset-cache)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(powershell:*)",
+      "Bash(./gradlew:*)"
     ],
     "deny": [],
     "ask": []

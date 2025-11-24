@@ -12,3 +12,4 @@ export { contentService } from './content.service';
 export { feedbackService } from './feedback.service';
 export { chatService } from './chat.service';
 export { callService } from './call.service';
+export { liveSessionService } from './liveSession.service';

@@ -20,6 +20,7 @@ import HomeScreen from './screens/HomeScreen';
 import BrowseChatScreen from './screens/BrowseChatScreen';
 import BrowseCallScreen from './screens/BrowseCallScreen';
 import ChatInterfaceScreen from './screens/ChatInterfaceScreen';
+import LiveSessionScreen from './screens/LiveSessionScreen';
 
 // Create Navigator
 const Stack = createNativeStackNavigator();
@@ -98,6 +99,15 @@ const Navigation = () => {
               options={{
                 animation: 'slide_from_right',
                 animationDuration: 300,
+              }}
+            />
+            <Stack.Screen
+              name="LiveSession"
+              component={LiveSessionScreen}
+              options={{
+                animation: 'fade',
+                animationDuration: 200,
+                presentation: 'fullScreenModal',
               }}
             />
           </>

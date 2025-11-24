@@ -8,6 +8,7 @@ import {
   userService,
   astrologerService,
   contentService,
+  liveSessionService,
 } from '../services';
 import {
   UserProfile,
@@ -15,11 +16,12 @@ import {
   Category,
   Banner,
 } from '../types/api.types';
+import { LiveSession } from '../types/liveSession.types';
 import { handleApiError } from '../utils/errorHandler';
 
 interface HomeData {
   userProfile: UserProfile | null;
-  liveAstrologers: Astrologer[];
+  liveSessions: LiveSession[];
   topRatedAstrologers: Astrologer[];
   categories: Category[];
   banners: Banner[];
@@ -36,7 +38,7 @@ export const useHomeData = (): UseHomeDataReturn => {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<HomeData>({
     userProfile: null,
-    liveAstrologers: [],
+    liveSessions: [],
     topRatedAstrologers: [],
     categories: [],
     banners: [],
@@ -51,10 +53,10 @@ export const useHomeData = (): UseHomeDataReturn => {
       setError(null);
 
       // Fetch all data in parallel for performance
-      const [userProfile, liveAstrologers, topRatedAstrologers, categories, banners] =
+      const [userProfile, liveSessions, topRatedAstrologers, categories, banners] =
         await Promise.all([
           userService.getProfile().catch(() => null), // User profile optional if not logged in
-          astrologerService.getLiveAstrologers(4),
+          liveSessionService.getLiveSessions(4),
           astrologerService.getTopRatedAstrologers(3),
           contentService.getCategories(),
           contentService.getBanners(),
@@ -62,7 +64,7 @@ export const useHomeData = (): UseHomeDataReturn => {
 
       setData({
         userProfile,
-        liveAstrologers,
+        liveSessions,
         topRatedAstrologers,
         categories,
         banners,
