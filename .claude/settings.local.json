@@ -22,7 +22,13 @@
       "Bash(cat:*)",
       "Bash(powershell:*)",
       "Bash(./gradlew:*)",
-      "Bash(move:*)"
+      "Bash(move:*)",
+      "Bash(npx expo install:*)",
+      "Skill(superpowers:brainstorming)",
+      "Bash(npm cache clean:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npx expo start:*)"
     ],
     "deny": [],
     "ask": []

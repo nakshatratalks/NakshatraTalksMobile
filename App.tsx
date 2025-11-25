@@ -1,17 +1,35 @@
 /**
  * Main App Component
  * Handles navigation and authentication flow
+ * Uses Tab Navigator for main screens (instant switching) + Stack for details
  */
 
-import React from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, ActivityIndicator, StyleSheet, Image, Dimensions } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NotifierWrapper } from 'react-native-notifier';
+import * as SplashScreen from 'expo-splash-screen';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSequence,
+  withDelay,
+  Easing,
+  runOnJS,
+} from 'react-native-reanimated';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { AppDataProvider } from './src/contexts/AppDataContext';
 import { ConfirmationModalProvider } from './src/utils/notificationService';
+
+// Prevent auto-hide of splash screen
+SplashScreen.preventAutoHideAsync();
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // Screens
 import WelcomeScreen from './screens/WelcomeScreen';
@@ -24,8 +42,9 @@ import LiveSessionScreen from './screens/LiveSessionScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import AstrologerDetailsScreen from './screens/AstrologerDetailsScreen';
 
-// Create Navigator
+// Create Navigators
 const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
 
 // Create React Query Client
 const queryClient = new QueryClient({
@@ -39,8 +58,83 @@ const queryClient = new QueryClient({
 });
 
 /**
+ * Animated Splash Screen Component
+ * Displays logo with fade-in and scale animation
+ * Minimum 3 second display time
+ */
+const AnimatedSplashScreen = ({ onAnimationComplete }: { onAnimationComplete: () => void }) => {
+  const opacity = useSharedValue(0);
+  const scale = useSharedValue(0.8);
+  const fadeOut = useSharedValue(1);
+
+  useEffect(() => {
+    // Start animation sequence
+    // 1. Fade in and scale up (0-800ms)
+    opacity.value = withTiming(1, { duration: 800, easing: Easing.out(Easing.ease) });
+    scale.value = withTiming(1, { duration: 800, easing: Easing.out(Easing.back(1.5)) });
+
+    // 2. Hold for remaining time to reach 3 seconds total
+    // 3. Fade out (2500-3000ms)
+    fadeOut.value = withDelay(
+      2500,
+      withTiming(0, { duration: 500, easing: Easing.in(Easing.ease) }, (finished) => {
+        if (finished) {
+          runOnJS(onAnimationComplete)();
+        }
+      })
+    );
+  }, []);
+
+  const logoAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+
+  const containerAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: fadeOut.value,
+  }));
+
+  return (
+    <Animated.View style={[styles.splashContainer, containerAnimatedStyle]}>
+      <Animated.View style={logoAnimatedStyle}>
+        <Image
+          source={require('./assets/images/logo.png')}
+          style={styles.splashLogo}
+          resizeMode="contain"
+        />
+      </Animated.View>
+    </Animated.View>
+  );
+};
+
+/**
+ * Main Tab Navigator
+ * Contains the 5 main screens that stay mounted for instant switching
+ */
+const MainTabs = () => {
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: { display: 'none' }, // Hide default tab bar, using custom BottomNavBar
+        lazy: false, // Load all screens immediately for instant access
+      }}
+      // No animation between tabs - instant switching
+      backBehavior="none"
+    >
+      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="BrowseChat" component={BrowseChatScreen} />
+      <Tab.Screen name="LiveSession" component={LiveSessionScreen} />
+      <Tab.Screen name="BrowseCall" component={BrowseCallScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
+    </Tab.Navigator>
+  );
+};
+
+/**
  * Navigation Component
  * Handles authenticated and unauthenticated flows
+ * Uses Tab Navigator for main screens + Stack for detail screens
  */
 const Navigation = () => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -69,55 +163,23 @@ const Navigation = () => {
             <Stack.Screen name="SignIn" component={SignInScreenWrapper} />
           </>
         ) : (
-          // Authenticated Stack
+          // Authenticated: Tab Navigator + Detail Screens in Stack
           <>
+            {/* Main Tabs - stays mounted, instant switching */}
             <Stack.Screen
-              name="Home"
-              component={HomeScreen}
+              name="MainTabs"
+              component={MainTabs}
               options={{
-                animation: 'fade',
-                animationDuration: 200,
+                animation: 'none', // No animation for initial load
               }}
             />
-            <Stack.Screen
-              name="BrowseChat"
-              component={BrowseChatScreen}
-              options={{
-                animation: 'fade',
-                animationDuration: 200,
-              }}
-            />
-            <Stack.Screen
-              name="BrowseCall"
-              component={BrowseCallScreen}
-              options={{
-                animation: 'fade',
-                animationDuration: 200,
-              }}
-            />
+            {/* Detail Screens - push on top of tabs */}
             <Stack.Screen
               name="ChatInterface"
               component={ChatInterfaceScreen}
               options={{
                 animation: 'slide_from_right',
-                animationDuration: 300,
-              }}
-            />
-            <Stack.Screen
-              name="LiveSession"
-              component={LiveSessionScreen}
-              options={{
-                animation: 'fade',
-                animationDuration: 200,
-                presentation: 'fullScreenModal',
-              }}
-            />
-            <Stack.Screen
-              name="Profile"
-              component={ProfileScreen}
-              options={{
-                animation: 'fade',
-                animationDuration: 200,
+                animationDuration: 250,
               }}
             />
             <Stack.Screen
@@ -125,7 +187,7 @@ const Navigation = () => {
               component={AstrologerDetailsScreen}
               options={{
                 animation: 'slide_from_right',
-                animationDuration: 300,
+                animationDuration: 250,
               }}
             />
           </>
@@ -150,15 +212,41 @@ const SignInScreenWrapper = ({ navigation }: any) => {
  * Main App Component
  */
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
+  const [appIsReady, setAppIsReady] = useState(false);
+
+  useEffect(() => {
+    // Hide the native splash screen once our custom one is ready
+    const hideSplash = async () => {
+      await SplashScreen.hideAsync();
+      setAppIsReady(true);
+    };
+    hideSplash();
+  }, []);
+
+  const handleSplashComplete = useCallback(() => {
+    setShowSplash(false);
+  }, []);
+
+  if (!appIsReady) {
+    return null;
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <NotifierWrapper>
-            <ConfirmationModalProvider>
-              <Navigation />
-            </ConfirmationModalProvider>
-          </NotifierWrapper>
+          <AppDataProvider>
+            <NotifierWrapper>
+              <ConfirmationModalProvider>
+                {showSplash ? (
+                  <AnimatedSplashScreen onAnimationComplete={handleSplashComplete} />
+                ) : (
+                  <Navigation />
+                )}
+              </ConfirmationModalProvider>
+            </NotifierWrapper>
+          </AppDataProvider>
         </AuthProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>
@@ -171,5 +259,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#fff',
+  },
+  splashContainer: {
+    flex: 1,
+    backgroundColor: '#2930A6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  splashLogo: {
+    width: screenWidth * 0.7,
+    height: screenWidth * 0.7 * 0.24, // Maintain aspect ratio (77/322 ≈ 0.24)
+    maxWidth: 322,
+    maxHeight: 77,
   },
 });

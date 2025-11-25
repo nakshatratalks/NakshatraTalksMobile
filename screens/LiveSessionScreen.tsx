@@ -16,7 +16,9 @@ import {
   AppState,
   Alert,
   Keyboard,
+  BackHandler,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
@@ -81,6 +83,36 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
 
+  // Navigate back to Home tab (since this is a tab screen, goBack() doesn't work)
+  // Performs cleanup in background and navigates immediately for instant response
+  const navigateBack = useCallback(() => {
+    // Navigate immediately for instant response
+    navigation.navigate('Home');
+
+    // Cleanup in background (don't wait for it)
+    // Disconnect socket
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+  }, [navigation]);
+
+  // Handle Android hardware back button
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        navigateBack();
+        return true; // Prevent default behavior (app closing)
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      return () => {
+        subscription.remove();
+      };
+    }, [navigateBack])
+  );
+
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -94,7 +126,8 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
 
   const flatListRef = useRef<FlatList>(null);
   const socketRef = useRef<Socket | null>(null);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  // Initialize to final value (no entrance animation - screens stay mounted)
+  const fadeAnim = useRef(new Animated.Value(1)).current;
   const uiOpacityAnim = useRef(new Animated.Value(1)).current;
   const appState = useRef(AppState.currentState);
   const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
@@ -108,16 +141,8 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
 
   const { scale } = useResponsiveLayout();
 
-  // Fade in animation on mount
-  useEffect(() => {
-    if (fontsLoaded) {
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [fontsLoaded]);
+  // No mount animation needed - screens stay mounted via Tab Navigator
+  // fadeAnim is already initialized to final value (1)
 
   // Keyboard event listeners
   useEffect(() => {
@@ -211,7 +236,7 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
 
       if (liveSessions.length === 0) {
         NotificationService.error('No live sessions available at the moment');
-        navigation.goBack();
+        navigateBack();
         return;
       }
 
@@ -227,7 +252,7 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
     } catch (error: any) {
       console.error('Error loading live sessions:', error);
       handleApiError(error);
-      navigation.goBack();
+      navigateBack();
     } finally {
       setLoading(false);
     }
@@ -276,7 +301,7 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
     socket.on('live:session-end', (data: { sessionId: string }) => {
       NotificationService.error('This live session has ended');
       setTimeout(() => {
-        navigation.goBack();
+        navigateBack();
       }, 2000);
     });
 
@@ -364,9 +389,9 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
     }
   };
 
-  const handleClose = async () => {
-    await cleanup();
-    navigation.goBack();
+  const handleClose = () => {
+    // navigateBack handles cleanup and navigation instantly
+    navigateBack();
   };
 
   // Toggle UI visibility with tap
@@ -567,7 +592,7 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
           <View
             style={[styles.inputKeyboardView, {
               paddingHorizontal: 16 * scale,
-              paddingBottom: 20 * scale,
+              paddingBottom: Math.max(20 * scale, insets.bottom + 10 * scale),
               paddingTop: 12 * scale,
               backgroundColor: 'rgba(0, 0, 0, 0.5)',
             }]}

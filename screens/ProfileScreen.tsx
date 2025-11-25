@@ -16,10 +16,13 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Modal,
+  Platform,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import {
   Lexend_400Regular,
   Lexend_500Medium,
@@ -34,6 +37,8 @@ import {
   Users,
   Edit3,
   Save,
+  ChevronDown,
+  X,
 } from 'lucide-react-native';
 import { useResponsiveLayout } from '../src/utils/responsive';
 import { useProfileData } from '../src/hooks/useProfileData';
@@ -65,6 +70,13 @@ const ProfileScreen = ({ navigation }: any) => {
   const [refreshing, setRefreshing] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
+  // Picker states
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showGenderPicker, setShowGenderPicker] = useState(false);
+  const [tempDate, setTempDate] = useState(new Date());
+  const [tempTime, setTempTime] = useState(new Date());
+
   // Form state for editing
   const [editedProfile, setEditedProfile] = useState({
     name: '',
@@ -75,9 +87,9 @@ const ProfileScreen = ({ navigation }: any) => {
     gender: null as 'male' | 'female' | 'other' | null,
   });
 
-  // Animation
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+  // Animation - Initialize to final values (no entrance animation - screens stay mounted)
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
   // Initialize form with user data
   useEffect(() => {
@@ -93,24 +105,8 @@ const ProfileScreen = ({ navigation }: any) => {
     }
   }, [userProfile]);
 
-  // Animate on mount
-  useEffect(() => {
-    if (fontsLoaded && userProfile) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          tension: 20,
-          friction: 7,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [fontsLoaded, userProfile]);
+  // No mount animation needed - screens stay mounted via Tab Navigator
+  // Values are already initialized to final state
 
   // Handle refresh
   const handleRefresh = async () => {
@@ -163,6 +159,98 @@ const ProfileScreen = ({ navigation }: any) => {
     } catch (error) {
       console.error('Error saving profile:', error);
     }
+  };
+
+  // Handle date picker
+  const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    if (event.type === 'set' && selectedDate) {
+      setTempDate(selectedDate);
+      const formattedDate = formatDateForStorage(selectedDate);
+      setEditedProfile({ ...editedProfile, dateOfBirth: formattedDate });
+      if (Platform.OS === 'android') {
+        setShowDatePicker(false);
+      }
+    }
+  };
+
+  const handleDateConfirm = () => {
+    const formattedDate = formatDateForStorage(tempDate);
+    setEditedProfile({ ...editedProfile, dateOfBirth: formattedDate });
+    setShowDatePicker(false);
+  };
+
+  // Handle time picker
+  const handleTimeChange = (event: DateTimePickerEvent, selectedTime?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowTimePicker(false);
+    }
+    if (event.type === 'set' && selectedTime) {
+      setTempTime(selectedTime);
+      const formattedTime = formatTimeForStorage(selectedTime);
+      setEditedProfile({ ...editedProfile, timeOfBirth: formattedTime });
+      if (Platform.OS === 'android') {
+        setShowTimePicker(false);
+      }
+    }
+  };
+
+  const handleTimeConfirm = () => {
+    const formattedTime = formatTimeForStorage(tempTime);
+    setEditedProfile({ ...editedProfile, timeOfBirth: formattedTime });
+    setShowTimePicker(false);
+  };
+
+  // Handle gender selection
+  const handleGenderSelect = (gender: 'male' | 'female' | 'other') => {
+    setEditedProfile({ ...editedProfile, gender });
+    setShowGenderPicker(false);
+  };
+
+  // Format date for storage (YYYY-MM-DD)
+  const formatDateForStorage = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Format time for storage (HH:MM AM/PM)
+  const formatTimeForStorage = (time: Date): string => {
+    let hours = time.getHours();
+    const minutes = String(time.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${hours}:${minutes} ${ampm}`;
+  };
+
+  // Open date picker
+  const openDatePicker = () => {
+    if (editedProfile.dateOfBirth) {
+      const parsedDate = new Date(editedProfile.dateOfBirth);
+      if (!isNaN(parsedDate.getTime())) {
+        setTempDate(parsedDate);
+      }
+    }
+    setShowDatePicker(true);
+  };
+
+  // Open time picker
+  const openTimePicker = () => {
+    if (editedProfile.timeOfBirth) {
+      const [time, period] = editedProfile.timeOfBirth.split(' ');
+      const [hoursStr, minutes] = time.split(':');
+      let hours = parseInt(hoursStr, 10);
+      if (period === 'PM' && hours !== 12) hours += 12;
+      if (period === 'AM' && hours === 12) hours = 0;
+      const parsedTime = new Date();
+      parsedTime.setHours(hours, parseInt(minutes, 10));
+      setTempTime(parsedTime);
+    }
+    setShowTimePicker(true);
   };
 
   // Wait only for fonts, not for data
@@ -272,7 +360,7 @@ const ProfileScreen = ({ navigation }: any) => {
             </TouchableOpacity>
 
             {/* Contact Info */}
-            <View style={[styles.contactInfo, { marginTop: 85 * scale, paddingRight: 10 * scale }]}>
+            <View style={[styles.contactInfo, { marginTop: 85 * scale }]}>
               {loading || !userProfile ? (
                 <>
                   {/* Skeleton for contact info */}
@@ -288,7 +376,7 @@ const ProfileScreen = ({ navigation }: any) => {
                   {/* Phone Number */}
                   <View style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
                     <Text style={[styles.infoLabel, { fontSize: 13 * scale }]}>Phone Number</Text>
-                    <Text style={[styles.infoValue, { fontSize: 12 * scale }]}>
+                    <Text style={[styles.infoValue, { fontSize: 12 * scale }]} numberOfLines={1} ellipsizeMode="tail">
                       {countryCode} {formattedNumber}
                     </Text>
                   </View>
@@ -296,13 +384,13 @@ const ProfileScreen = ({ navigation }: any) => {
                   {/* City/Town */}
                   <View style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
                     <Text style={[styles.infoLabel, { fontSize: 13 * scale }]}>City/Town</Text>
-                    <Text style={[styles.infoValue, { fontSize: 12 * scale }]}>Chennai</Text>
+                    <Text style={[styles.infoValue, { fontSize: 12 * scale }]} numberOfLines={1} ellipsizeMode="tail">Chennai</Text>
                   </View>
 
                   {/* Address */}
                   <View style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
                     <Text style={[styles.infoLabel, { fontSize: 13 * scale }]}>Address</Text>
-                    <Text style={[styles.infoValue, { fontSize: 12 * scale }]}>
+                    <Text style={[styles.infoValue, { fontSize: 12 * scale }]} numberOfLines={2} ellipsizeMode="tail">
                       No 45, abc nagar, 1st street
                     </Text>
                   </View>
@@ -310,7 +398,7 @@ const ProfileScreen = ({ navigation }: any) => {
                   {/* Pincode */}
                   <View style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
                     <Text style={[styles.infoLabel, { fontSize: 13 * scale }]}>Pincode</Text>
-                    <Text style={[styles.infoValue, { fontSize: 12 * scale }]}>600 026</Text>
+                    <Text style={[styles.infoValue, { fontSize: 12 * scale }]} numberOfLines={1} ellipsizeMode="tail">600 026</Text>
                   </View>
                 </>
               )}
@@ -340,16 +428,17 @@ const ProfileScreen = ({ navigation }: any) => {
               <View style={styles.formGroup}>
                 <Text style={[styles.formLabel, { fontSize: 16 * scale }]}>Date of Birth</Text>
                 {isEditing ? (
-                <View style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}>
+                <TouchableOpacity
+                  onPress={openDatePicker}
+                  style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}
+                  activeOpacity={0.7}
+                >
                   <Calendar size={24 * scale} color="#FFCF0D" />
-                  <TextInput
-                    style={[styles.input, { fontSize: 14 * scale, marginLeft: 12 * scale }]}
-                    value={editedProfile.dateOfBirth}
-                    onChangeText={(text) => setEditedProfile({ ...editedProfile, dateOfBirth: text })}
-                    placeholder="DD-MMM-YYYY"
-                    placeholderTextColor="#AAAAAA"
-                  />
-                </View>
+                  <Text style={[styles.input, { fontSize: 14 * scale, marginLeft: 12 * scale, color: editedProfile.dateOfBirth ? '#2930A6' : '#AAAAAA' }]}>
+                    {editedProfile.dateOfBirth ? formatDate(editedProfile.dateOfBirth) : 'Select date'}
+                  </Text>
+                  <ChevronDown size={18 * scale} color="#2930A6" />
+                </TouchableOpacity>
               ) : (
                 <View style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}>
                   <Calendar size={24 * scale} color="#FFCF0D" />
@@ -388,16 +477,17 @@ const ProfileScreen = ({ navigation }: any) => {
             <View style={[styles.formGroup, { marginTop: 20 * scale }]}>
               <Text style={[styles.formLabel, { fontSize: 16 * scale }]}>Time of Birth</Text>
               {isEditing ? (
-                <View style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}>
+                <TouchableOpacity
+                  onPress={openTimePicker}
+                  style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}
+                  activeOpacity={0.7}
+                >
                   <Clock size={24 * scale} color="#FFCF0D" />
-                  <TextInput
-                    style={[styles.input, { fontSize: 14 * scale, marginLeft: 12 * scale }]}
-                    value={editedProfile.timeOfBirth}
-                    onChangeText={(text) => setEditedProfile({ ...editedProfile, timeOfBirth: text })}
-                    placeholder="HH:MM AM/PM"
-                    placeholderTextColor="#AAAAAA"
-                  />
-                </View>
+                  <Text style={[styles.input, { fontSize: 14 * scale, marginLeft: 12 * scale, color: editedProfile.timeOfBirth ? '#2930A6' : '#AAAAAA' }]}>
+                    {editedProfile.timeOfBirth || 'Select time'}
+                  </Text>
+                  <ChevronDown size={18 * scale} color="#2930A6" />
+                </TouchableOpacity>
               ) : (
                 <View style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}>
                   <Clock size={24 * scale} color="#FFCF0D" />
@@ -412,18 +502,17 @@ const ProfileScreen = ({ navigation }: any) => {
             <View style={[styles.formGroup, { marginTop: 20 * scale, marginBottom: 20 * scale }]}>
               <Text style={[styles.formLabel, { fontSize: 16 * scale }]}>Gender</Text>
               {isEditing ? (
-                <View style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}>
+                <TouchableOpacity
+                  onPress={() => setShowGenderPicker(true)}
+                  style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}
+                  activeOpacity={0.7}
+                >
                   <Users size={24 * scale} color="#FFCF0D" />
-                  <TextInput
-                    style={[styles.input, { fontSize: 14 * scale, marginLeft: 12 * scale }]}
-                    value={editedProfile.gender || ''}
-                    onChangeText={(text) =>
-                      setEditedProfile({ ...editedProfile, gender: text ? text as 'male' | 'female' | 'other' : null })
-                    }
-                    placeholder="Male/Female/Other"
-                    placeholderTextColor="#AAAAAA"
-                  />
-                </View>
+                  <Text style={[styles.input, { fontSize: 14 * scale, marginLeft: 12 * scale, color: editedProfile.gender ? '#2930A6' : '#AAAAAA' }]}>
+                    {editedProfile.gender ? editedProfile.gender.charAt(0).toUpperCase() + editedProfile.gender.slice(1) : 'Select gender'}
+                  </Text>
+                  <ChevronDown size={18 * scale} color="#2930A6" />
+                </TouchableOpacity>
               ) : (
                 <View style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}>
                   <Users size={24 * scale} color="#FFCF0D" />
@@ -443,6 +532,137 @@ const ProfileScreen = ({ navigation }: any) => {
         activeTab={activeTab}
         navigation={navigation}
       />
+
+      {/* Date Picker Modal (iOS) */}
+      {Platform.OS === 'ios' && showDatePicker && (
+        <Modal
+          transparent
+          animationType="slide"
+          visible={showDatePicker}
+          onRequestClose={() => setShowDatePicker(false)}
+        >
+          <View style={styles.pickerModalOverlay}>
+            <View style={styles.pickerModalContent}>
+              <View style={styles.pickerModalHeader}>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <Text style={styles.pickerCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.pickerTitle}>Select Date</Text>
+                <TouchableOpacity onPress={handleDateConfirm}>
+                  <Text style={styles.pickerDoneText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={tempDate}
+                mode="date"
+                display="spinner"
+                onChange={handleDateChange}
+                maximumDate={new Date()}
+                minimumDate={new Date(1900, 0, 1)}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Date Picker (Android) */}
+      {Platform.OS === 'android' && showDatePicker && (
+        <DateTimePicker
+          value={tempDate}
+          mode="date"
+          display="default"
+          onChange={handleDateChange}
+          maximumDate={new Date()}
+          minimumDate={new Date(1900, 0, 1)}
+        />
+      )}
+
+      {/* Time Picker Modal (iOS) */}
+      {Platform.OS === 'ios' && showTimePicker && (
+        <Modal
+          transparent
+          animationType="slide"
+          visible={showTimePicker}
+          onRequestClose={() => setShowTimePicker(false)}
+        >
+          <View style={styles.pickerModalOverlay}>
+            <View style={styles.pickerModalContent}>
+              <View style={styles.pickerModalHeader}>
+                <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                  <Text style={styles.pickerCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.pickerTitle}>Select Time</Text>
+                <TouchableOpacity onPress={handleTimeConfirm}>
+                  <Text style={styles.pickerDoneText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={tempTime}
+                mode="time"
+                display="spinner"
+                onChange={handleTimeChange}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Time Picker (Android) */}
+      {Platform.OS === 'android' && showTimePicker && (
+        <DateTimePicker
+          value={tempTime}
+          mode="time"
+          display="default"
+          onChange={handleTimeChange}
+        />
+      )}
+
+      {/* Gender Picker Modal */}
+      <Modal
+        transparent
+        animationType="slide"
+        visible={showGenderPicker}
+        onRequestClose={() => setShowGenderPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.pickerModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowGenderPicker(false)}
+        >
+          <View style={styles.genderPickerContent}>
+            <View style={styles.genderPickerHeader}>
+              <Text style={styles.genderPickerTitle}>Select Gender</Text>
+              <TouchableOpacity onPress={() => setShowGenderPicker(false)}>
+                <X size={24} color="#666666" />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={[styles.genderOption, editedProfile.gender === 'male' && styles.genderOptionSelected]}
+              onPress={() => handleGenderSelect('male')}
+            >
+              <Text style={[styles.genderOptionText, editedProfile.gender === 'male' && styles.genderOptionTextSelected]}>
+                Male
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.genderOption, editedProfile.gender === 'female' && styles.genderOptionSelected]}
+              onPress={() => handleGenderSelect('female')}
+            >
+              <Text style={[styles.genderOptionText, editedProfile.gender === 'female' && styles.genderOptionTextSelected]}>
+                Female
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.genderOption, editedProfile.gender === 'other' && styles.genderOptionSelected]}
+              onPress={() => handleGenderSelect('other')}
+            >
+              <Text style={[styles.genderOptionText, editedProfile.gender === 'other' && styles.genderOptionTextSelected]}>
+                Other
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -506,7 +726,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   leftContainer: {
-    flex: 1,
+    flex: 0.45,
     backgroundColor: '#FFCF0D',
     alignItems: 'center',
     paddingBottom: 20,
@@ -514,11 +734,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   rightContainer: {
-    flex: 1,
+    flex: 0.55,
     backgroundColor: '#FFFFFF',
     paddingLeft: 10,
+    paddingRight: 16,
     paddingTop: 0,
     justifyContent: 'flex-start',
+    overflow: 'hidden',
   },
   headerTitle: {
     fontFamily: 'Lexend_500Medium',
@@ -586,6 +808,7 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-start',
     borderWidth: 2,
     borderColor: '#FFCF0D',
     paddingHorizontal: 16,
@@ -600,6 +823,85 @@ const styles = StyleSheet.create({
   inputText: {
     fontFamily: 'Lexend_400Regular',
     color: '#2930A6',
+  },
+  // Picker Modal Styles
+  pickerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  pickerModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 30,
+  },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+  },
+  pickerCancelText: {
+    fontFamily: 'Lexend_400Regular',
+    fontSize: 16,
+    color: '#666666',
+  },
+  pickerTitle: {
+    fontFamily: 'Lexend_600SemiBold',
+    fontSize: 17,
+    color: '#1A1A1A',
+  },
+  pickerDoneText: {
+    fontFamily: 'Lexend_600SemiBold',
+    fontSize: 16,
+    color: '#2930A6',
+  },
+  // Gender Picker Styles
+  genderPickerContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  genderPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+  },
+  genderPickerTitle: {
+    fontFamily: 'Lexend_600SemiBold',
+    fontSize: 18,
+    color: '#1A1A1A',
+  },
+  genderOption: {
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  genderOptionSelected: {
+    backgroundColor: 'rgba(41, 48, 166, 0.1)',
+    borderColor: '#2930A6',
+    borderWidth: 1,
+  },
+  genderOptionText: {
+    fontFamily: 'Lexend_500Medium',
+    fontSize: 16,
+    color: '#333333',
+  },
+  genderOptionTextSelected: {
+    color: '#2930A6',
+    fontFamily: 'Lexend_600SemiBold',
   },
 });
 

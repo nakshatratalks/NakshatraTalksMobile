@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,28 @@ import {
   StyleSheet,
   ScrollView,
   Dimensions,
-  Animated,
-  Easing,
   Platform,
   ActivityIndicator,
   Keyboard,
+  KeyboardAvoidingView,
   RefreshControl,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withDelay,
+  withRepeat,
+  withSequence,
+  interpolate,
+  interpolateColor,
+  Easing,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
@@ -38,32 +53,34 @@ import {
   User,
   Bell,
   IndianRupee,
-  Sun,
-  Scroll,
-  HeartHandshake,
-  MessageCircle,
-  Home,
-  MessageSquare,
-  Phone,
-  UserCircle2,
-  Mail,
   Star,
-  Video,
-  CheckCircle,
-  AlertCircle,
+  ChevronRight,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useResponsiveLayout } from '../src/utils/responsive';
 import { useHomeData } from '../src/hooks/useHomeData';
 import { useAuth } from '../src/contexts/AuthContext';
-import { feedbackService } from '../src/services';
-import NotificationService from '../src/utils/notificationService';
-import { handleApiError } from '../src/utils/errorHandler';
 import Sidebar from '../components/Sidebar';
 import { BottomNavBar } from '../components/BottomNavBar';
 import { LiveSessionCardSkeleton, TopRatedCardSkeleton } from '../components/skeleton';
+import { FeedbackForm } from '../components/FeedbackForm';
 
 const { width: screenWidth } = Dimensions.get('window');
+
+// AnimatedEntrance Component - DISABLED for instant loading
+// Screens now stay mounted via Tab Navigator, so entrance animations are not needed
+interface AnimatedEntranceProps {
+  children: React.ReactNode;
+  from?: { opacity?: number; translateY?: number; translateX?: number };
+  delay?: number;
+  damping?: number;
+  stiffness?: number;
+}
+
+const AnimatedEntrance = ({ children }: AnimatedEntranceProps) => {
+  // Simply render children without animation for instant display
+  return <>{children}</>;
+};
 
 // Mock data for top rated astrologers (fallback if API fails)
 const topRatedAstrologers = [
@@ -109,39 +126,29 @@ const HomeScreen = ({ navigation }: any) => {
   const { user } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [comments, setComments] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState({ name: '', email: '', comments: '' });
-  const [focusedField, setFocusedField] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
 
-  // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const screenScale = useRef(new Animated.Value(1)).current;
-  const screenTranslateX = useRef(new Animated.Value(0)).current;
-  const contentOpacityAnim = useRef(new Animated.Value(1)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
-  const searchBorderAnim = useRef(new Animated.Value(0)).current;
+  // Animation values - Reanimated
+  // Initialize to final values (no entrance animation - screens stay mounted)
+  const fadeAnim = useSharedValue(1);
+  const slideAnim = useSharedValue(0);
+  const screenScale = useSharedValue(1);
+  const screenTranslateX = useSharedValue(0);
+  const contentOpacityAnim = useSharedValue(1);
+  const scaleAnim = useSharedValue(1);
+  const searchBorderAnim = useSharedValue(0);
+
+  // Scroll tracking for compact header
+  const scrollY = useSharedValue(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const pullDistance = useSharedValue(0);
 
   // Use API data or fallback to mock data for top rated only (live sessions from API only)
   const displayLiveSessions = apiLiveSessions || [];
   const displayTopRatedAstrologers = apiTopRatedAstrologers.length > 0 ? apiTopRatedAstrologers : topRatedAstrologers;
-
-  // Stagger animation values for cards - recreate when data changes
-  const liveCardsAnim = useMemo(
-    () => displayLiveSessions.map(() => new Animated.Value(0)),
-    [displayLiveSessions.length]
-  );
-  const topRatedCardsAnim = useMemo(
-    () => displayTopRatedAstrologers.map(() => new Animated.Value(0)),
-    [displayTopRatedAstrologers.length]
-  );
 
   const [fontsLoaded] = useFonts({
     Lexend_400Regular,
@@ -159,159 +166,60 @@ const HomeScreen = ({ navigation }: any) => {
 
   const { cardWidth, scale } = useResponsiveLayout();
 
-  // Trigger animations on mount
+  // Initialize values immediately - no entrance animation needed
+  // Screens stay mounted via Tab Navigator for instant access
   useEffect(() => {
     if (fontsLoaded) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 600,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          friction: 8,
-          tension: 40,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
-      // Stagger animations for live session cards
-      if (displayLiveSessions.length > 0) {
-        setTimeout(() => {
-          Animated.stagger(
-            100,
-            liveCardsAnim.map((anim) =>
-              Animated.spring(anim, {
-                toValue: 1,
-                friction: 7,
-                tension: 40,
-                useNativeDriver: true,
-              })
-            )
-          ).start();
-        }, 300);
-      }
-
-      // Stagger animations for top rated cards
-      setTimeout(() => {
-        Animated.stagger(
-          150,
-          topRatedCardsAnim.map((anim) =>
-            Animated.spring(anim, {
-              toValue: 1,
-              friction: 7,
-              tension: 40,
-              useNativeDriver: true,
-            })
-          )
-        ).start();
-      }, 500);
+      // Set to final values immediately
+      fadeAnim.value = 1;
+      slideAnim.value = 0;
+      scaleAnim.value = 1;
     }
   }, [fontsLoaded]);
 
-  // Search focus animation
+  // Search focus animation with haptics
   const handleSearchFocus = () => {
     setSearchFocused(true);
-    Animated.timing(searchBorderAnim, {
-      toValue: 1,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    searchBorderAnim.value = withTiming(1, { duration: 200 });
   };
 
   const handleSearchBlur = () => {
     setSearchFocused(false);
-    Animated.timing(searchBorderAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
+    searchBorderAnim.value = withTiming(0, { duration: 200 });
   };
 
-
-  // 3D Sidebar animation effect with content fade
+  // 3D Sidebar animation effect with content fade - Reanimated
   useEffect(() => {
     const SIDEBAR_WIDTH = screenWidth * 0.75;
     if (sidebarVisible) {
-      Animated.parallel([
-        Animated.timing(screenScale, {
-          toValue: 0.85,
-          duration: 350,
-          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-          useNativeDriver: true,
-        }),
-        Animated.timing(screenTranslateX, {
-          toValue: SIDEBAR_WIDTH * 0.8,
-          duration: 350,
-          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-          useNativeDriver: true,
-        }),
-        Animated.timing(contentOpacityAnim, {
-          toValue: 0.3,
-          duration: 350,
-          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-          useNativeDriver: true,
-        }),
-      ]).start();
+      screenScale.value = withTiming(0.85, {
+        duration: 350,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+      });
+      screenTranslateX.value = withTiming(SIDEBAR_WIDTH * 0.8, {
+        duration: 350,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+      });
+      contentOpacityAnim.value = withTiming(0.3, {
+        duration: 350,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+      });
     } else {
-      Animated.parallel([
-        Animated.timing(screenScale, {
-          toValue: 1,
-          duration: 300,
-          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-          useNativeDriver: true,
-        }),
-        Animated.timing(screenTranslateX, {
-          toValue: 0,
-          duration: 300,
-          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-          useNativeDriver: true,
-        }),
-        Animated.timing(contentOpacityAnim, {
-          toValue: 1,
-          duration: 300,
-          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-          useNativeDriver: true,
-        }),
-      ]).start();
+      screenScale.value = withTiming(1, {
+        duration: 300,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+      });
+      screenTranslateX.value = withTiming(0, {
+        duration: 300,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+      });
+      contentOpacityAnim.value = withTiming(1, {
+        duration: 300,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+      });
     }
   }, [sidebarVisible]);
-
-  // Form validation
-  const validateForm = () => {
-    const newErrors = { name: '', email: '', comments: '' };
-    let isValid = true;
-
-    if (!name.trim()) {
-      newErrors.name = 'Name is required';
-      isValid = false;
-    }
-
-    if (!email.trim()) {
-      newErrors.email = 'Email is required';
-      isValid = false;
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      newErrors.email = 'Please enter a valid email';
-      isValid = false;
-    }
-
-    if (!comments.trim()) {
-      newErrors.comments = 'Comments are required';
-      isValid = false;
-    } else if (comments.trim().length < 10) {
-      newErrors.comments = 'Please provide at least 10 characters';
-      isValid = false;
-    }
-
-    setErrors(newErrors);
-    return isValid;
-  };
 
   // Handle pull-to-refresh
   const handleRefresh = async () => {
@@ -325,39 +233,119 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
-  // Handle form submission
-  const handleSubmit = async () => {
-    if (!validateForm()) {
-      return;
-    }
+  // Animated styles
+  const mainContainerStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { scale: screenScale.value },
+        { translateX: screenTranslateX.value },
+      ],
+      opacity: contentOpacityAnim.value,
+      borderRadius: sidebarVisible ? 30 : 0,
+    };
+  });
 
-    setIsSubmitting(true);
+  const scrollViewStyle = useAnimatedStyle(() => {
+    return {
+      opacity: fadeAnim.value,
+      transform: [{ translateY: slideAnim.value }],
+    };
+  });
 
-    try {
-      // Submit feedback to API
-      await feedbackService.submitFeedback({
-        name,
-        email: email || undefined,
-        comments,
-      });
+  const headerStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scaleAnim.value }],
+    };
+  });
 
-      setIsSubmitting(false);
+  const searchContainerStyle = useAnimatedStyle(() => {
+    return {
+      borderWidth: interpolate(searchBorderAnim.value, [0, 1], [1, 2]),
+      borderColor: interpolateColor(
+        searchBorderAnim.value,
+        [0, 1],
+        ['#2930A6', '#FFCF0D']
+      ),
+      shadowOpacity: interpolate(searchBorderAnim.value, [0, 1], [0.1, 0.3]),
+    };
+  });
 
-      // Show success notification
-      NotificationService.success('Feedback submitted successfully!');
+  // Scroll handler for compact header
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    scrollY.value = event.nativeEvent.contentOffset.y;
+  }, []);
 
-      // Clear form
-      setName('');
-      setEmail('');
-      setComments('');
-      setErrors({ name: '', email: '', comments: '' });
-    } catch (error: any) {
-      console.error('Feedback submission error:', error);
-      setIsSubmitting(false);
-      handleApiError(error);
-    }
-  };
+  // Compact header animated styles based on scroll
+  const profileCircleStyle = useAnimatedStyle(() => {
+    const size = interpolate(scrollY.value, [0, 80], [48 * scale, 36 * scale], 'clamp');
+    return {
+      width: size,
+      height: size,
+      borderRadius: size / 2,
+    };
+  });
 
+  const heyTextStyle = useAnimatedStyle(() => {
+    return {
+      opacity: interpolate(scrollY.value, [0, 40], [1, 0], 'clamp'),
+      height: interpolate(scrollY.value, [0, 40], [20 * scale, 0], 'clamp'),
+      marginBottom: interpolate(scrollY.value, [0, 40], [2 * scale, 0], 'clamp'),
+    };
+  });
+
+  const nameTextStyle = useAnimatedStyle(() => {
+    return {
+      fontSize: interpolate(scrollY.value, [0, 80], [15 * scale, 16 * scale], 'clamp'),
+    };
+  });
+
+  const greetingContainerStyle = useAnimatedStyle(() => {
+    return {
+      flexDirection: scrollY.value > 40 ? 'row' : 'column',
+      alignItems: scrollY.value > 40 ? 'center' : 'flex-start',
+    };
+  });
+
+  const headerPaddingStyle = useAnimatedStyle(() => {
+    return {
+      paddingTop: interpolate(scrollY.value, [0, 80], [12, 8], 'clamp'),
+      paddingBottom: interpolate(scrollY.value, [0, 80], [12, 8], 'clamp'),
+    };
+  });
+
+  const logoStyle = useAnimatedStyle(() => {
+    return {
+      opacity: interpolate(scrollY.value, [0, 60], [1, 0], 'clamp'),
+      transform: [
+        { scale: interpolate(scrollY.value, [0, 60], [1, 0.9], 'clamp') },
+      ],
+      height: interpolate(scrollY.value, [0, 60], [60 * scale, 0], 'clamp'),
+      marginBottom: interpolate(scrollY.value, [0, 60], [8 * scale, 0], 'clamp'),
+    };
+  });
+
+  // Search bar sticky behavior - becomes sticky when hitting header
+  const searchBarStyle = useAnimatedStyle(() => {
+    const shouldStick = scrollY.value > 100;
+    return {
+      position: shouldStick ? 'absolute' as const : 'relative' as const,
+      top: shouldStick ? 0 : undefined,
+      left: shouldStick ? 0 : undefined,
+      right: shouldStick ? 0 : undefined,
+      zIndex: shouldStick ? 1000 : 1,
+      backgroundColor: '#FFFFFF',
+    };
+  });
+
+  // Custom pull-to-refresh indicator style
+  const refreshIndicatorStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { rotate: `${interpolate(pullDistance.value, [0, 100], [0, 360])}deg` },
+      ],
+      opacity: interpolate(pullDistance.value, [0, 50], [0, 1], 'clamp'),
+    };
+  });
 
   if (!fontsLoaded) {
     return null;
@@ -367,135 +355,138 @@ const HomeScreen = ({ navigation }: any) => {
     <>
       <Animated.View style={[
         styles.mainContainer,
+        mainContainerStyle,
         {
-          transform: [
-            { scale: screenScale },
-            { translateX: screenTranslateX },
-          ],
-          opacity: contentOpacityAnim,
-          borderRadius: sidebarVisible ? 30 : 0,
           overflow: 'hidden',
         }
       ]}>
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar style={sidebarVisible ? "light" : "dark"} />
+        {/* Fixed status bar - always dark icons on light background */}
+        <StatusBar style="dark" backgroundColor="#FFFFFF" />
 
-        <Animated.ScrollView
-        style={[styles.container, {
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }],
-        }]}
-        showsVerticalScrollIndicator={false}
-        bounces={true}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="#2930a6"
-            colors={['#2930a6']}
-          />
-        }
-      >
-        {/* Header Section */}
-        <Animated.View style={[styles.header, {
-          paddingHorizontal: 20 * scale,
-          transform: [{ scale: scaleAnim }],
-        }]}>
-          <TouchableOpacity
-            style={styles.headerLeft}
-            onPress={() => setSidebarVisible(true)}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.profileCircle, { width: 56 * scale, height: 56 * scale }]}>
-              {userProfile?.profileImage ? (
-                <Image
-                  source={{ uri: userProfile.profileImage }}
-                  style={styles.profileImage}
-                />
-              ) : (
-                <User size={28 * scale} color="#2930A6" />
-              )}
-            </View>
-            <View style={styles.greetingContainer}>
-              <Text style={[styles.heyText, { fontSize: 16 * scale }]}>Hey</Text>
-              <Text style={[styles.nameText, { fontSize: 16 * scale }]}>
-                {userProfile?.name || user?.name || 'Guest'}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <View style={styles.headerRight}>
-            <AnimatedButton
-              style={[styles.walletButton, {
-                height: 32 * scale,
-                borderRadius: 20 * scale,
-                paddingHorizontal: 14 * scale
-              }]}
-            >
-              <IndianRupee size={18 * scale} color="#FFFFFF" />
-              <Text style={[styles.walletText, { fontSize: 16 * scale }]}>
-                {userProfile?.walletBalance?.toFixed(2) || '0.00'}
-              </Text>
-            </AnimatedButton>
-
-            <AnimatedButton style={[styles.bellButton, { width: 28 * scale, height: 28 * scale }]}>
-              <Bell size={24 * scale} color="#595959" />
-            </AnimatedButton>
-          </View>
-        </Animated.View>
-
-        {/* Logo */}
-        <View style={[styles.logoContainer, { marginTop: 20 * scale, marginBottom: 20 * scale }]}>
-          <Image
-            source={require('../assets/images/logo.png')}
-            style={[styles.logo, { width: 283 * scale, height: 68 * scale }]}
-            resizeMode="contain"
-          />
-        </View>
-
-        {/* Search Bar */}
-        <Animated.View
-          style={[
-            styles.searchContainer,
-            {
-              marginHorizontal: 20 * scale,
-              marginBottom: 20 * scale,
-              height: 48 * scale,
-              borderRadius: 100 * scale,
-              paddingHorizontal: 16 * scale,
-              borderWidth: searchBorderAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [1, 2],
-              }),
-              borderColor: searchBorderAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: ['#2930A6', '#FFCF0D'],
-              }),
-              shadowOpacity: searchBorderAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.1, 0.3],
-              }),
-            },
-          ]}
+        {/* Glassmorphism Header - Compact on scroll */}
+        <BlurView
+          intensity={95}
+          tint="light"
+          style={styles.headerBlur}
         >
-          <View style={styles.searchLeft}>
-            <Search size={20 * scale} color={searchFocused ? '#FFCF0D' : '#2930A6'} />
-            <TextInput
-              style={[styles.searchInput, { fontSize: 12 * scale }]}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search astrologers..."
-              placeholderTextColor="#2930A6"
-              onFocus={handleSearchFocus}
-              onBlur={handleSearchBlur}
-            />
-          </View>
-          <TouchableOpacity activeOpacity={0.7}>
-            <SlidersHorizontal size={18 * scale} color="#2930A6" />
-          </TouchableOpacity>
-        </Animated.View>
+          <Animated.View style={[styles.header, {
+            paddingHorizontal: 20 * scale,
+          }, headerStyle, headerPaddingStyle]}>
+            <TouchableOpacity
+              style={styles.headerLeft}
+              onPress={() => setSidebarVisible(true)}
+              activeOpacity={0.7}
+            >
+              <Animated.View style={[styles.profileCircle, profileCircleStyle]}>
+                {userProfile?.profileImage ? (
+                  <Image
+                    source={{ uri: userProfile.profileImage }}
+                    style={styles.profileImage}
+                  />
+                ) : (
+                  <User size={20 * scale} color="#2930A6" />
+                )}
+              </Animated.View>
+              <Animated.View style={[styles.greetingContainer, greetingContainerStyle]}>
+                <Animated.Text style={[styles.heyText, { fontSize: 14 * scale }, heyTextStyle]}>Hey</Animated.Text>
+                <Animated.Text style={[styles.nameText, nameTextStyle]} numberOfLines={1}>
+                  {userProfile?.name || user?.name || 'Guest'}
+                </Animated.Text>
+              </Animated.View>
+            </TouchableOpacity>
 
-        {/* Category Icons */}
+            <View style={styles.headerRight}>
+              <AnimatedButton
+                style={[styles.walletButton, {
+                  height: 30 * scale,
+                  borderRadius: 15 * scale,
+                  paddingHorizontal: 12 * scale
+                }]}
+              >
+                <IndianRupee size={16 * scale} color="#FFFFFF" />
+                <Text style={[styles.walletText, { fontSize: 14 * scale }]}>
+                  {userProfile?.walletBalance?.toFixed(2) || '0.00'}
+                </Text>
+              </AnimatedButton>
+
+              <AnimatedButton style={[styles.bellButton, { width: 26 * scale, height: 26 * scale }]}>
+                <Bell size={22 * scale} color="#595959" />
+              </AnimatedButton>
+            </View>
+          </Animated.View>
+        </BlurView>
+
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          <Animated.ScrollView
+            ref={scrollRef as any}
+            style={[styles.container, scrollViewStyle]}
+            showsVerticalScrollIndicator={false}
+            bounces={true}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor="#FFCF0D"
+                colors={['#FFCF0D', '#2930A6']}
+                progressBackgroundColor="#FFFFFF"
+                progressViewOffset={Platform.OS === 'ios' ? 100 : 80}
+              />
+            }
+          >
+            {/* Spacer to account for absolute positioned header */}
+            {/* Header height: paddingTop (50 iOS/24 Android) + content (~60) + paddingBottom (4) */}
+            <View style={{ height: Platform.OS === 'ios' ? 70 * scale : 70 * scale }} />
+
+            {/* Logo - Animated to collapse on scroll */}
+            <Animated.View style={[styles.logoContainer, logoStyle]}>
+              <Image
+                source={require('../assets/images/logo.png')}
+                style={[styles.logo, { width: 260 * scale, height: 60 * scale }]}
+                resizeMode="contain"
+              />
+            </Animated.View>
+
+            {/* Search Bar - Positioned after logo */}
+            <Animated.View
+              style={[
+                styles.searchContainer,
+                searchContainerStyle,
+                {
+                  marginHorizontal: 20 * scale,
+                  marginBottom: 20 * scale,
+                  height: 46 * scale,
+                  borderRadius: 23 * scale,
+                  paddingHorizontal: 16 * scale,
+                },
+              ]}
+            >
+              <View style={styles.searchLeft}>
+                <Search size={20 * scale} color={searchFocused ? '#FFCF0D' : '#2930A6'} />
+                <TextInput
+                  style={[styles.searchInput, { fontSize: 13 * scale }]}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search astrologers..."
+                  placeholderTextColor="#2930A6"
+                  onFocus={handleSearchFocus}
+                  onBlur={handleSearchBlur}
+                />
+              </View>
+              <TouchableOpacity activeOpacity={0.7}>
+                <SlidersHorizontal size={18 * scale} color="#2930A6" />
+              </TouchableOpacity>
+            </Animated.View>
+
+            {/* Category Icons */}
         <View style={[styles.categoriesRow, {
           marginHorizontal: 20 * scale,
           marginBottom: 30 * scale
@@ -619,11 +610,13 @@ const HomeScreen = ({ navigation }: any) => {
               <TouchableOpacity
                 activeOpacity={0.6}
                 onPress={() => navigation.navigate('LiveSession')}
+                style={styles.viewAllButton}
               >
-                <Text style={[styles.viewAll, { fontSize: 10 * scale }]}>View All</Text>
+                <Text style={[styles.viewAll, { fontSize: 14 * scale }]}>View All</Text>
+                <ChevronRight size={14 * scale} color="#2930A6" />
               </TouchableOpacity>
             </View>
-            <ScrollView
+            <Animated.ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingHorizontal: 20 * scale }}
@@ -631,17 +624,23 @@ const HomeScreen = ({ navigation }: any) => {
               decelerationRate="fast"
             >
               {displayLiveSessions.map((session, index) => (
-                <LiveSessionCard
+                <AnimatedEntrance
                   key={session.id}
-                  session={session}
-                  index={index}
-                  scale={scale}
-                  animValue={liveCardsAnim[index]}
-                  isLast={index === displayLiveSessions.length - 1}
-                  navigation={navigation}
-                />
+                  from={{ opacity: 0, translateY: 30 }}
+                  delay={300 + index * 100}
+                  damping={7}
+                  stiffness={40}
+                >
+                  <LiveSessionCard
+                    session={session}
+                    index={index}
+                    scale={scale}
+                    isLast={index === displayLiveSessions.length - 1}
+                    navigation={navigation}
+                  />
+                </AnimatedEntrance>
               ))}
-            </ScrollView>
+            </Animated.ScrollView>
           </View>
         ) : null}
 
@@ -649,8 +648,9 @@ const HomeScreen = ({ navigation }: any) => {
         <View style={[styles.section, { marginBottom: 30 * scale, paddingHorizontal: 20 * scale }]}>
           <View style={[styles.sectionHeader, { marginBottom: 16 * scale }]}>
             <Text style={[styles.sectionTitle, { fontSize: 16 * scale }]}>Top Rated Astrologers</Text>
-            <TouchableOpacity activeOpacity={0.6}>
-              <Text style={[styles.viewAll, { fontSize: 10 * scale }]}>View All</Text>
+            <TouchableOpacity activeOpacity={0.6} style={styles.viewAllButton}>
+              <Text style={[styles.viewAll, { fontSize: 14 * scale }]}>View All</Text>
+              <ChevronRight size={14 * scale} color="#2930A6" />
             </TouchableOpacity>
           </View>
 
@@ -665,171 +665,37 @@ const HomeScreen = ({ navigation }: any) => {
             </>
           ) : (
             displayTopRatedAstrologers.map((astrologer, index) => (
-              <TopRatedCard
+              <AnimatedEntrance
                 key={astrologer.id}
-                astrologer={astrologer}
-                index={index}
-                scale={scale}
-                animValue={topRatedCardsAnim[index]}
-                isLast={index === topRatedAstrologers.length - 1}
-                navigation={navigation}
-              />
+                from={{ opacity: 0, translateX: 50 }}
+                delay={500 + index * 150}
+                damping={7}
+                stiffness={40}
+              >
+                <TopRatedCard
+                  astrologer={astrologer}
+                  index={index}
+                  scale={scale}
+                  isLast={index === topRatedAstrologers.length - 1}
+                  navigation={navigation}
+                />
+              </AnimatedEntrance>
             ))
           )}
         </View>
 
         {/* Feedback Form Section */}
-        <View style={[styles.feedbackSection, {
-          marginHorizontal: 20 * scale,
-          marginBottom: 100 * scale,
-          borderRadius: 16 * scale,
-          padding: 20 * scale
-        }]}>
-          <Text style={[styles.feedbackTitle, { fontSize: 16 * scale, marginBottom: 20 * scale }]}>
-            Feedback Form
-          </Text>
-
-          <View style={[styles.feedbackForm, {
-            borderRadius: 12 * scale,
-            padding: 25 * scale
-          }]}>
-            {/* Name Input */}
-            <View style={[styles.inputGroup, { marginBottom: 16 * scale }]}>
-              <Text style={[styles.inputLabel, { fontSize: 12 * scale, marginBottom: 6 * scale }]}>Name</Text>
-              <View style={[
-                styles.inputContainer,
-                {
-                  height: 45 * scale,
-                  borderRadius: 10 * scale,
-                  paddingHorizontal: 12 * scale,
-                  borderColor: errors.name ? '#EF4444' : focusedField === 'name' ? '#2930A6' : '#DDDDDD',
-                  borderWidth: focusedField === 'name' ? 2 : 1.5,
-                }
-              ]}>
-                <User size={20 * scale} color={focusedField === 'name' ? '#2930A6' : '#666666'} />
-                <TextInput
-                  style={[styles.input, { fontSize: 12 * scale, marginLeft: 10 * scale }]}
-                  value={name}
-                  onChangeText={(text) => {
-                    setName(text);
-                    if (errors.name) setErrors({ ...errors, name: '' });
-                  }}
-                  placeholder="Enter your name"
-                  placeholderTextColor="#AAAAAA"
-                  onFocus={() => setFocusedField('name')}
-                  onBlur={() => setFocusedField('')}
-                />
-              </View>
-              {errors.name ? (
-                <View style={[styles.errorContainer, { marginTop: 4 * scale }]}>
-                  <AlertCircle size={12 * scale} color="#EF4444" />
-                  <Text style={[styles.errorText, { fontSize: 11 * scale }]}>{errors.name}</Text>
-                </View>
-              ) : null}
-            </View>
-
-            {/* Email Input */}
-            <View style={[styles.inputGroup, { marginBottom: 16 * scale }]}>
-              <Text style={[styles.inputLabel, { fontSize: 12 * scale, marginBottom: 6 * scale }]}>Email Address</Text>
-              <View style={[
-                styles.inputContainer,
-                {
-                  height: 45 * scale,
-                  borderRadius: 10 * scale,
-                  paddingHorizontal: 12 * scale,
-                  borderColor: errors.email ? '#EF4444' : focusedField === 'email' ? '#2930A6' : '#DDDDDD',
-                  borderWidth: focusedField === 'email' ? 2 : 1.5,
-                }
-              ]}>
-                <Mail size={20 * scale} color={focusedField === 'email' ? '#2930A6' : '#666666'} />
-                <TextInput
-                  style={[styles.input, { fontSize: 12 * scale, marginLeft: 10 * scale }]}
-                  value={email}
-                  onChangeText={(text) => {
-                    setEmail(text);
-                    if (errors.email) setErrors({ ...errors, email: '' });
-                  }}
-                  placeholder="Enter your email"
-                  placeholderTextColor="#AAAAAA"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  onFocus={() => setFocusedField('email')}
-                  onBlur={() => setFocusedField('')}
-                />
-              </View>
-              {errors.email ? (
-                <View style={[styles.errorContainer, { marginTop: 4 * scale }]}>
-                  <AlertCircle size={12 * scale} color="#EF4444" />
-                  <Text style={[styles.errorText, { fontSize: 11 * scale }]}>{errors.email}</Text>
-                </View>
-              ) : null}
-            </View>
-
-            {/* Comments Input */}
-            <View style={[styles.inputGroup, { marginBottom: 20 * scale }]}>
-              <Text style={[styles.inputLabel, { fontSize: 12 * scale, marginBottom: 6 * scale }]}>Comments</Text>
-              <View style={[
-                styles.textAreaContainer,
-                {
-                  height: 120 * scale,
-                  borderRadius: 10 * scale,
-                  padding: 12 * scale,
-                  borderColor: errors.comments ? '#EF4444' : focusedField === 'comments' ? '#2930A6' : '#DDDDDD',
-                  borderWidth: focusedField === 'comments' ? 2 : 1.5,
-                }
-              ]}>
-                <TextInput
-                  style={[styles.textArea, { fontSize: 12 * scale }]}
-                  value={comments}
-                  onChangeText={(text) => {
-                    setComments(text);
-                    if (errors.comments) setErrors({ ...errors, comments: '' });
-                  }}
-                  placeholder="Share your feedback..."
-                  placeholderTextColor="#AAAAAA"
-                  multiline
-                  numberOfLines={6}
-                  textAlignVertical="top"
-                  onFocus={() => setFocusedField('comments')}
-                  onBlur={() => setFocusedField('')}
-                />
-              </View>
-              {errors.comments ? (
-                <View style={[styles.errorContainer, { marginTop: 4 * scale }]}>
-                  <AlertCircle size={12 * scale} color="#EF4444" />
-                  <Text style={[styles.errorText, { fontSize: 11 * scale }]}>{errors.comments}</Text>
-                </View>
-              ) : null}
-            </View>
-
-            {/* Submit Button */}
-            <AnimatedButton
-              onPress={handleSubmit}
-              style={[
-                styles.submitButton,
-                {
-                  height: 48 * scale,
-                  borderRadius: 10 * scale,
-                  paddingHorizontal: 11 * scale,
-                  opacity: isSubmitting ? 0.7 : 1,
-                }
-              ]}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={[styles.submitButtonText, { fontSize: 14 * scale }]}>SUBMIT</Text>
-              )}
-            </AnimatedButton>
-          </View>
+        <View style={{ marginHorizontal: 20 * scale, marginBottom: 100 * scale }}>
+          <FeedbackForm scale={scale} />
         </View>
-      </Animated.ScrollView>
+          </Animated.ScrollView>
+        </KeyboardAvoidingView>
 
-      {/* Bottom Navigation */}
-      <BottomNavBar
-        activeTab={activeTab}
-        navigation={navigation}
-      />
+        {/* Bottom Navigation */}
+        <BottomNavBar
+          activeTab={activeTab}
+          navigation={navigation}
+        />
       </SafeAreaView>
       </Animated.View>
 
@@ -842,31 +708,51 @@ const HomeScreen = ({ navigation }: any) => {
   );
 };
 
-// Live Session Card Component with gradient overlay
-const LiveSessionCard = ({ session, index, scale, animValue, isLast, navigation }: any) => {
-  const scaleValue = useRef(new Animated.Value(1)).current;
-  const defaultAnimValue = useRef(new Animated.Value(1)).current;
-  const safeAnimValue = animValue || defaultAnimValue;
+// Live Session Card Component with soft glow effect - Reanimated
+const LiveSessionCard = ({ session, index, scale, isLast, navigation }: any) => {
+  const scaleValue = useSharedValue(1);
+  const glowOpacity = useSharedValue(0.4);
+
+  // Pulsing glow animation
+  useEffect(() => {
+    glowOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0.7, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.4, { duration: 1500, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
+    );
+  }, []);
 
   const onPressIn = () => {
-    Animated.spring(scaleValue, {
-      toValue: 0.95,
-      useNativeDriver: true,
-    }).start();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    scaleValue.value = withSpring(0.95);
   };
 
   const onPressOut = () => {
-    Animated.spring(scaleValue, {
-      toValue: 1,
-      friction: 3,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
+    scaleValue.value = withSpring(1, {
+      damping: 3,
+      stiffness: 40,
+    });
   };
 
   const handlePress = () => {
     navigation.navigate('LiveSession', { sessionId: session.id });
   };
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scaleValue.value }],
+    };
+  });
+
+  const glowStyle = useAnimatedStyle(() => {
+    return {
+      shadowOpacity: glowOpacity.value,
+      shadowRadius: interpolate(glowOpacity.value, [0.4, 0.7], [8, 16]),
+    };
+  });
 
   return (
     <TouchableOpacity
@@ -878,21 +764,13 @@ const LiveSessionCard = ({ session, index, scale, animValue, isLast, navigation 
       <Animated.View
         style={[
           styles.liveAstrologerCard,
+          animatedStyle,
+          glowStyle,
           {
             width: 114 * scale,
             height: 164 * scale,
             borderRadius: 20 * scale,
             marginRight: isLast ? 0 : 8 * scale,
-            opacity: safeAnimValue,
-            transform: [
-              { scale: scaleValue },
-              {
-                translateY: safeAnimValue.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [30, 0],
-                }),
-              },
-            ],
           },
         ]}
       >
@@ -923,51 +801,42 @@ const LiveSessionCard = ({ session, index, scale, animValue, isLast, navigation 
   );
 };
 
-// Top Rated Card Component with enhanced design
-const TopRatedCard = ({ astrologer, index, scale, animValue, isLast, navigation }: any) => {
-  const scaleValue = useRef(new Animated.Value(1)).current;
-  const defaultAnimValue = useRef(new Animated.Value(1)).current;
-  const safeAnimValue = animValue || defaultAnimValue;
+// Top Rated Card Component with enhanced design - Reanimated
+const TopRatedCard = ({ astrologer, index, scale, isLast, navigation }: any) => {
+  const scaleValue = useSharedValue(1);
 
   const onPressIn = () => {
-    Animated.spring(scaleValue, {
-      toValue: 0.98,
-      useNativeDriver: true,
-    }).start();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    scaleValue.value = withSpring(0.98);
   };
 
   const onPressOut = () => {
-    Animated.spring(scaleValue, {
-      toValue: 1,
-      friction: 3,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
+    scaleValue.value = withSpring(1, {
+      damping: 3,
+      stiffness: 40,
+    });
   };
 
   const handlePress = () => {
     navigation.navigate('AstrologerDetails', { astrologerId: astrologer.id });
   };
 
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scaleValue.value }],
+    };
+  });
+
   return (
     <Animated.View
       style={[
         styles.topRatedCard,
+        animatedStyle,
         {
           height: 140 * scale,
           borderRadius: 20 * scale,
           padding: 12 * scale,
           marginBottom: isLast ? 0 : 16 * scale,
-          opacity: safeAnimValue,
-          transform: [
-            { scale: scaleValue },
-            {
-              translateX: safeAnimValue.interpolate({
-                inputRange: [0, 1],
-                outputRange: [50, 0],
-              }),
-            },
-          ],
         },
       ]}
     >
@@ -1023,25 +892,27 @@ const TopRatedCard = ({ astrologer, index, scale, animValue, isLast, navigation 
   );
 };
 
-// Animated Button Component with scale effect
+// Animated Button Component with scale effect - Reanimated
 const AnimatedButton = ({ children, onPress, style }: any) => {
-  const scaleValue = useRef(new Animated.Value(1)).current;
+  const scaleValue = useSharedValue(1);
 
   const onPressIn = () => {
-    Animated.spring(scaleValue, {
-      toValue: 0.95,
-      useNativeDriver: true,
-    }).start();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    scaleValue.value = withSpring(0.95);
   };
 
   const onPressOut = () => {
-    Animated.spring(scaleValue, {
-      toValue: 1,
-      friction: 3,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
+    scaleValue.value = withSpring(1, {
+      damping: 3,
+      stiffness: 40,
+    });
   };
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scaleValue.value }],
+    };
+  });
 
   return (
     <TouchableOpacity
@@ -1050,54 +921,76 @@ const AnimatedButton = ({ children, onPress, style }: any) => {
       onPressOut={onPressOut}
       activeOpacity={1}
     >
-      <Animated.View style={[style, { transform: [{ scale: scaleValue }] }]}>
+      <Animated.View style={[style, animatedStyle]}>
         {children}
       </Animated.View>
     </TouchableOpacity>
   );
 };
 
-// Category Icon Component
+// Category Icon Component - Enhanced Micro-interactions
 const CategoryIcon = ({ iconImage, label, scale }: any) => {
-  const [isPressed, setIsPressed] = useState(false);
-  const scaleValue = useRef(new Animated.Value(1)).current;
-  const rotateValue = useRef(new Animated.Value(0)).current;
+  const scaleValue = useSharedValue(1);
+  const rotateValue = useSharedValue(0);
+  const rippleScale = useSharedValue(0);
+  const rippleOpacity = useSharedValue(0);
+  const brightnessValue = useSharedValue(0);
 
   const onPressIn = () => {
-    setIsPressed(true);
-    Animated.parallel([
-      Animated.spring(scaleValue, {
-        toValue: 0.9,
-        useNativeDriver: true,
-      }),
-      Animated.timing(rotateValue, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Ripple effect
+    rippleScale.value = 0;
+    rippleOpacity.value = 0.3;
+    rippleScale.value = withTiming(1.5, { duration: 300 });
+    rippleOpacity.value = withTiming(0, { duration: 300 });
+
+    // Scale and wobble
+    scaleValue.value = withSequence(
+      withTiming(0.9, { duration: 100 }),
+      withSpring(1.05, { damping: 8, stiffness: 200 }),
+      withSpring(1, { damping: 10, stiffness: 150 })
+    );
+
+    // Wobble rotation
+    rotateValue.value = withSequence(
+      withTiming(8, { duration: 100 }),
+      withTiming(-4, { duration: 100 }),
+      withTiming(0, { duration: 100 })
+    );
+
+    // Brightness boost
+    brightnessValue.value = withTiming(1, { duration: 100 });
   };
 
   const onPressOut = () => {
-    setIsPressed(false);
-    Animated.parallel([
-      Animated.spring(scaleValue, {
-        toValue: 1,
-        friction: 3,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-      Animated.timing(rotateValue, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    brightnessValue.value = withTiming(0, { duration: 200 });
   };
 
-  const rotation = rotateValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '5deg'],
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { scale: scaleValue.value },
+        { rotate: `${rotateValue.value}deg` },
+      ],
+    };
+  });
+
+  const rippleStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: rippleScale.value }],
+      opacity: rippleOpacity.value,
+    };
+  });
+
+  const backgroundStyle = useAnimatedStyle(() => {
+    return {
+      backgroundColor: interpolateColor(
+        brightnessValue.value,
+        [0, 1],
+        ['#FFCF0D', '#FFE066']
+      ),
+    };
   });
 
   return (
@@ -1107,21 +1000,35 @@ const CategoryIcon = ({ iconImage, label, scale }: any) => {
       onPressOut={onPressOut}
       activeOpacity={1}
     >
-      <Animated.View style={[
-        styles.categoryIconCircle,
-        {
-          width: 74 * scale,
-          height: 74 * scale,
-          borderRadius: 16 * scale,
-          transform: [{ scale: scaleValue }, { rotate: rotation }],
-        }
-      ]}>
-        <Image
-          source={iconImage}
-          style={{ width: 42 * scale, height: 42 * scale }}
-          resizeMode="contain"
-        />
-      </Animated.View>
+      <View style={styles.categoryIconWrapper}>
+        {/* Ripple Effect */}
+        <Animated.View style={[
+          styles.rippleEffect,
+          rippleStyle,
+          {
+            width: 74 * scale,
+            height: 74 * scale,
+            borderRadius: 16 * scale,
+          }
+        ]} />
+
+        <Animated.View style={[
+          styles.categoryIconCircle,
+          animatedStyle,
+          backgroundStyle,
+          {
+            width: 74 * scale,
+            height: 74 * scale,
+            borderRadius: 16 * scale,
+          }
+        ]}>
+          <Image
+            source={iconImage}
+            style={{ width: 42 * scale, height: 42 * scale }}
+            resizeMode="contain"
+          />
+        </Animated.View>
+      </View>
       <Text style={[styles.categoryLabel, { fontSize: 10 * scale, marginTop: 8 * scale }]} numberOfLines={2}>
         {label}
       </Text>
@@ -1142,16 +1049,28 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  headerBlur: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+    paddingTop: Platform.OS === 'ios' ? 50 : 24,
+    paddingBottom: 4,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 20,
+    paddingTop: 8,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    flex: 1,
   },
   profileCircle: {
     width: 56,
@@ -1170,10 +1089,14 @@ const styles = StyleSheet.create({
   },
   greetingContainer: {
     flexDirection: 'column',
+    justifyContent: 'center',
+    flex: 1,
+    maxWidth: 120,
   },
   heyText: {
     fontFamily: 'Nunito_700Bold',
-    fontSize: 16,
+    fontSize: 14,
+    overflow: 'hidden',
     color: '#595959',
   },
   nameText: {
@@ -1246,6 +1169,15 @@ const styles = StyleSheet.create({
   },
   categoryButton: {
     alignItems: 'center',
+  },
+  categoryIconWrapper: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rippleEffect: {
+    position: 'absolute',
+    backgroundColor: 'rgba(255, 207, 13, 0.4)',
   },
   categoryIconCircle: {
     backgroundColor: '#FFCF0D',
@@ -1330,20 +1262,29 @@ const styles = StyleSheet.create({
   },
   viewAll: {
     fontFamily: 'Poppins_500Medium',
-    fontSize: 10,
-    color: '#666666',
+    fontSize: 14,
+    color: '#2930A6',
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 4,
+    minHeight: 44,
   },
   liveAstrologerCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 10,
+    // Soft yellow glow effect
+    shadowColor: '#FFCF0D',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 8,
     borderWidth: 2,
-    borderColor: 'rgba(255, 207, 13, 0.3)',
+    borderColor: 'rgba(255, 207, 13, 0.6)',
   },
   liveAstrologerImage: {
     width: '100%',
@@ -1483,21 +1424,33 @@ const styles = StyleSheet.create({
   },
   feedbackSection: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 28,
     shadowColor: '#2930A6',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(41, 48, 166, 0.1)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(41, 48, 166, 0.08)',
+  },
+  feedbackHeader: {
+    alignItems: 'center',
+  },
+  feedbackHeaderLine: {
+    backgroundColor: '#FFCF0D',
   },
   feedbackTitle: {
-    fontFamily: 'Lexend_600SemiBold',
-    fontSize: 16,
+    fontFamily: 'Lexend_700Bold',
+    fontSize: 20,
     color: '#1a1a1a',
     textAlign: 'center',
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
+  },
+  feedbackSubtitle: {
+    fontFamily: 'Lexend_400Regular',
+    fontSize: 13,
+    color: '#888888',
+    textAlign: 'center',
   },
   feedbackForm: {
     backgroundColor: '#FAFAFA',
@@ -1573,7 +1526,121 @@ const styles = StyleSheet.create({
     fontFamily: 'Lexend_700Bold',
     fontSize: 14,
     color: '#FFFFFF',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
+  },
+  // Floating Label Input Styles - Enhanced Premium Design
+  floatingInputGroup: {
+    width: '100%',
+    position: 'relative',
+  },
+  inputGlowEffect: {
+    position: 'absolute',
+    backgroundColor: '#2930A6',
+    zIndex: -1,
+  },
+  floatingInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FAFAFA',
+    shadowColor: '#2930A6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  floatingInputContent: {
+    flex: 1,
+    position: 'relative',
+    height: '100%',
+    justifyContent: 'center',
+  },
+  labelCenterWrapper: {
+    position: 'absolute',
+    left: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  labelBackground: {
+    position: 'absolute',
+    top: -2,
+    bottom: -2,
+    left: -2,
+    right: -2,
+    backgroundColor: '#FFFFFF',
+    zIndex: -1,
+  },
+  floatingLabelCentered: {
+    fontFamily: 'Lexend_500Medium',
+    color: '#888888',
+    letterSpacing: 0.2,
+  },
+  floatingLabelWrapper: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  floatingLabel: {
+    position: 'absolute',
+    left: 0,
+    fontFamily: 'Lexend_400Regular',
+    color: '#888888',
+  },
+  floatingInput: {
+    flex: 1,
+    fontFamily: 'Lexend_400Regular',
+    color: '#1a1a1a',
+    paddingVertical: 0,
+  },
+  floatingTextAreaContainer: {
+    backgroundColor: '#FAFAFA',
+    shadowColor: '#2930A6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 4,
+    position: 'relative',
+  },
+  floatingLabelTextArea: {
+    position: 'absolute',
+    fontFamily: 'Lexend_400Regular',
+    color: '#888888',
+  },
+  floatingTextArea: {
+    fontFamily: 'Lexend_400Regular',
+    color: '#1a1a1a',
+    textAlignVertical: 'top',
+    minHeight: 80,
+  },
+  // Premium Animated Floating Label Styles
+  floatingLabelAnimated: {
+    position: 'absolute',
+    left: 0,
+    fontFamily: 'Lexend_500Medium',
+    color: '#888888',
+    letterSpacing: 0.2,
+  },
+  floatingInputAnimated: {
+    flex: 1,
+    fontFamily: 'Lexend_400Regular',
+    color: '#1a1a1a',
+    paddingVertical: 0,
+    height: '100%',
+  },
+  floatingLabelTextAreaAnimated: {
+    fontFamily: 'Lexend_500Medium',
+    color: '#888888',
+    letterSpacing: 0.2,
+  },
+  gradientSubmitButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#2930A6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
 });
 

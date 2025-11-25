@@ -109,17 +109,17 @@ const BrowseChatScreen = ({ navigation }: any) => {
     pricePerMinute: 0,
   });
 
-  // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+  // Animation values - Initialize to final values (no entrance animation - screens stay mounted)
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
   const screenScale = useRef(new Animated.Value(1)).current;
   const screenTranslateX = useRef(new Animated.Value(0)).current;
   const contentOpacityAnim = useRef(new Animated.Value(1)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
   const searchBorderAnim = useRef(new Animated.Value(0)).current;
 
-  // Stagger animation values for cards
-  const cardsAnim = useRef(astrologers.map(() => new Animated.Value(0))).current;
+  // Stagger animation values for cards - Initialize to 1 (no entrance animation)
+  const cardsAnim = useRef(astrologers.map(() => new Animated.Value(1))).current;
 
   const [fontsLoaded] = useFonts({
     Lexend_400Regular,
@@ -133,44 +133,8 @@ const BrowseChatScreen = ({ navigation }: any) => {
 
   const { cardWidth, scale } = useResponsiveLayout();
 
-  // Trigger animations on mount
-  useEffect(() => {
-    if (fontsLoaded) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 600,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          friction: 8,
-          tension: 40,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
-      // Stagger animations for astrologer cards
-      setTimeout(() => {
-        Animated.stagger(
-          100,
-          cardsAnim.map((anim) =>
-            Animated.spring(anim, {
-              toValue: 1,
-              friction: 7,
-              tension: 40,
-              useNativeDriver: true,
-            })
-          )
-        ).start();
-      }, 300);
-    }
-  }, [fontsLoaded, astrologers.length]);
+  // No mount animation needed - screens stay mounted via Tab Navigator
+  // All animation values are already initialized to their final state
 
   // Search focus animation
   const handleSearchFocus = () => {

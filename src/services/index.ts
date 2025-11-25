@@ -13,3 +13,7 @@ export { feedbackService } from './feedback.service';
 export { chatService } from './chat.service';
 export { callService } from './call.service';
 export { liveSessionService } from './liveSession.service';
+
+// Cache and prefetch services
+export { cacheService } from './cache.service';
+export { prefetchService } from './prefetch.service';

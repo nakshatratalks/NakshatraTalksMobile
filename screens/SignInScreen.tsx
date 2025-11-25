@@ -1,5 +1,18 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, TextInput, StyleSheet, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  TextInput,
+  StyleSheet,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
@@ -163,18 +176,29 @@ const SignInScreen = ({ onSuccess }: SignInScreenProps) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
-
-      <View style={styles.outer}>
-        <View
-          style={[
-            styles.card,
-            {
-              width: cardWidth,
-              borderRadius: 50 * scale,
-              paddingHorizontal: 30 * scale,
-            },
-          ]}
-        >
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            bounces={true}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.outer}>
+              <View
+                style={[
+                  styles.card,
+                  {
+                    width: cardWidth,
+                    borderRadius: 50 * scale,
+                    paddingHorizontal: 30 * scale,
+                  },
+                ]}
+              >
           {/* Logo */}
           <View style={[styles.logoWrapper, { marginTop: 40 * scale }]}>
             <Image
@@ -478,7 +502,7 @@ const SignInScreen = ({ onSuccess }: SignInScreenProps) => {
           </TouchableOpacity>
 
           {/* Terms and Privacy */}
-          <View style={[styles.termsContainer, { marginTop: 17 * scale }]}>
+          <View style={[styles.termsContainer, { marginTop: 17 * scale, marginBottom: 30 * scale }]}>
             <Text
               style={[
                 styles.termsText,
@@ -505,8 +529,11 @@ const SignInScreen = ({ onSuccess }: SignInScreenProps) => {
               </Text>
             </Text>
           </View>
-        </View>
-      </View>
+              </View>
+            </View>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -515,6 +542,13 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  keyboardAvoid: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   outer: {
     flex: 1,
