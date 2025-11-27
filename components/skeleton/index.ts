@@ -9,3 +9,4 @@ export { ProfileSkeleton } from './ProfileSkeleton';
 export { LiveSessionListSkeleton } from './LiveSessionListSkeleton';
 export { ChatHistoryItemSkeleton } from './ChatHistoryItemSkeleton';
 export { ChatHistoryViewSkeleton } from './ChatHistoryViewSkeleton';
+export { CallHistoryItemSkeleton } from './CallHistoryItemSkeleton';

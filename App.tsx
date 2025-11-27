@@ -43,6 +43,7 @@ import ProfileScreen from './screens/ProfileScreen';
 import AstrologerDetailsScreen from './screens/AstrologerDetailsScreen';
 import ChatHistoryScreen from './screens/ChatHistoryScreen';
 import ChatHistoryViewScreen from './screens/ChatHistoryViewScreen';
+import CallHistoryScreen from './screens/CallHistoryScreen';
 
 // Create Navigators
 const Stack = createNativeStackNavigator();
@@ -194,6 +195,10 @@ const Navigation = () => {
             <Stack.Screen
               name="ChatHistoryView"
               component={ChatHistoryViewScreen}
+            />
+            <Stack.Screen
+              name="CallHistory"
+              component={CallHistoryScreen}
             />
           </>
         )}
