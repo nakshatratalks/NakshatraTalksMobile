@@ -598,7 +598,7 @@ const AstrologerCard = ({ astrologer, index, scale, animValue, isLast, navigatio
               paddingVertical: 8 * scale,
               borderRadius: 25 * scale
             }]}
-            onPress={() => console.log('Call with', astrologer.name)}
+            onPress={() => navigation.navigate('CallScreen', { astrologer })}
           >
             <Text style={[styles.callButtonText, { fontSize: 18 * scale }]}>Call</Text>
           </AnimatedButton>

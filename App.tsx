@@ -44,6 +44,7 @@ import AstrologerDetailsScreen from './screens/AstrologerDetailsScreen';
 import ChatHistoryScreen from './screens/ChatHistoryScreen';
 import ChatHistoryViewScreen from './screens/ChatHistoryViewScreen';
 import CallHistoryScreen from './screens/CallHistoryScreen';
+import CallScreen from './screens/CallScreen';
 
 // Create Navigators
 const Stack = createNativeStackNavigator();
@@ -199,6 +200,13 @@ const Navigation = () => {
             <Stack.Screen
               name="CallHistory"
               component={CallHistoryScreen}
+            />
+            <Stack.Screen
+              name="CallScreen"
+              component={CallScreen}
+              options={{
+                gestureEnabled: false, // Disable swipe back during call
+              }}
             />
           </>
         )}

@@ -91,6 +91,18 @@ export const API_ENDPOINTS = {
     END_SESSION: (sessionId: string) => `/api/v1/call/sessions/${sessionId}/end`,
     SESSION_DETAILS: (sessionId: string) => `/api/v1/call/sessions/${sessionId}`,
     RATING: (sessionId: string) => `/api/v1/call/sessions/${sessionId}/rating`,
+    // Call Request Flow
+    REQUEST: '/api/v1/call/request',
+    PENDING_REQUEST: '/api/v1/call/request/pending',
+    REQUEST_STATUS: (requestId: string) => `/api/v1/call/request/${requestId}/status`,
+    CANCEL_REQUEST: (requestId: string) => `/api/v1/call/request/${requestId}/cancel`,
+    // Queue
+    QUEUE_JOIN: '/api/v1/call/queue/join',
+    QUEUE_STATUS: '/api/v1/call/queue/status',
+    QUEUE_POSITION: (astrologerId: string) => `/api/v1/call/queue/${astrologerId}/position`,
+    QUEUE_INFO: (astrologerId: string) => `/api/v1/call/queue/${astrologerId}/info`,
+    QUEUE_LEAVE: (queueId: string) => `/api/v1/call/queue/${queueId}/leave`,
+    QUEUE_CALL_NOW: (queueId: string) => `/api/v1/call/queue/${queueId}/call-now`,
   },
 
   // Notifications

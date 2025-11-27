@@ -162,3 +162,123 @@ export const subscribeToWalletBalance = (
     channel.unsubscribe();
   };
 };
+
+/**
+ * Subscribe to call request status changes
+ * Use this to get real-time updates when astrologer accepts/rejects
+ * @param requestId - Call request ID
+ * @param callback - Function to call when status changes
+ * @returns Unsubscribe function
+ */
+export const subscribeToCallRequestStatus = (
+  requestId: string,
+  callback: (payload: any) => void
+) => {
+  const channel = supabase
+    .channel(`call-request-${requestId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'call_requests',
+        filter: `id=eq.${requestId}`,
+      },
+      callback
+    )
+    .subscribe();
+
+  return () => {
+    channel.unsubscribe();
+  };
+};
+
+/**
+ * Subscribe to queue position updates
+ * Use this to get real-time updates on queue position and when turn comes
+ * @param queueId - Queue entry ID
+ * @param callback - Function to call when queue status changes
+ * @returns Unsubscribe function
+ */
+export const subscribeToQueueStatus = (
+  queueId: string,
+  callback: (payload: any) => void
+) => {
+  const channel = supabase
+    .channel(`queue-status-${queueId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'call_queue',
+        filter: `id=eq.${queueId}`,
+      },
+      callback
+    )
+    .subscribe();
+
+  return () => {
+    channel.unsubscribe();
+  };
+};
+
+/**
+ * Subscribe to all queue entries for a user
+ * Use this to track multiple queue positions
+ * @param userId - User ID
+ * @param callback - Function to call when any queue entry changes
+ * @returns Unsubscribe function
+ */
+export const subscribeToUserQueueEntries = (
+  userId: string,
+  callback: (payload: any) => void
+) => {
+  const channel = supabase
+    .channel(`user-queue-${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'call_queue',
+        filter: `user_id=eq.${userId}`,
+      },
+      callback
+    )
+    .subscribe();
+
+  return () => {
+    channel.unsubscribe();
+  };
+};
+
+/**
+ * Subscribe to call session changes
+ * Use this for real-time call session updates (e.g., when call ends)
+ * @param sessionId - Call session ID
+ * @param callback - Function to call when session changes
+ * @returns Unsubscribe function
+ */
+export const subscribeToCallSession = (
+  sessionId: string,
+  callback: (payload: any) => void
+) => {
+  const channel = supabase
+    .channel(`call-session-${sessionId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'call_sessions',
+        filter: `id=eq.${sessionId}`,
+      },
+      callback
+    )
+    .subscribe();
+
+  return () => {
+    channel.unsubscribe();
+  };
+};

@@ -1,6 +1,6 @@
 /**
  * Call Service
- * Handles call-related API calls
+ * Handles call-related API calls including request-accept flow and queue management
  */
 
 import { apiClient } from './api.client';
@@ -16,6 +16,15 @@ import {
   ChatSession,
   EndSessionData,
 } from '../types/api.types';
+import {
+  CreateCallRequestResponse,
+  PollCallRequestStatusResponse,
+  JoinQueueResponse,
+  QueueEntry,
+  QueueInfo,
+  EndCallResponse,
+  CallRatingRequest,
+} from '../types/call.types';
 
 interface AvailableCallAstrologersResponse {
   data: Astrologer[];
@@ -66,8 +75,135 @@ class CallService {
     return response.data!;
   }
 
+  // ==================== Call Request Flow ====================
+
   /**
-   * Start a new call session
+   * Create a new call request
+   * Astrologer has 60 seconds to accept/reject
+   * @param astrologerId - Astrologer ID
+   * @returns Promise<CreateCallRequestResponse>
+   */
+  async createCallRequest(astrologerId: string): Promise<CreateCallRequestResponse> {
+    const response = await apiClient.post<ApiResponse<CreateCallRequestResponse>>(
+      API_ENDPOINTS.CALL.REQUEST,
+      { astrologerId }
+    );
+    return response.data!;
+  }
+
+  /**
+   * Get user's pending call request
+   * @returns Promise<CreateCallRequestResponse | null>
+   */
+  async getPendingRequest(): Promise<CreateCallRequestResponse | null> {
+    const response = await apiClient.get<ApiResponse<CreateCallRequestResponse>>(
+      API_ENDPOINTS.CALL.PENDING_REQUEST
+    );
+    return response.data || null;
+  }
+
+  /**
+   * Poll call request status
+   * Use this to check if astrologer accepted/rejected
+   * @param requestId - Request ID
+   * @returns Promise<PollCallRequestStatusResponse>
+   */
+  async pollRequestStatus(requestId: string): Promise<PollCallRequestStatusResponse> {
+    const response = await apiClient.get<ApiResponse<PollCallRequestStatusResponse>>(
+      API_ENDPOINTS.CALL.REQUEST_STATUS(requestId)
+    );
+    return response.data!;
+  }
+
+  /**
+   * Cancel a pending call request
+   * @param requestId - Request ID
+   * @returns Promise<void>
+   */
+  async cancelRequest(requestId: string): Promise<void> {
+    await apiClient.post<ApiResponse<void>>(
+      API_ENDPOINTS.CALL.CANCEL_REQUEST(requestId)
+    );
+  }
+
+  // ==================== Queue Management ====================
+
+  /**
+   * Get queue info for an astrologer (public)
+   * @param astrologerId - Astrologer ID
+   * @returns Promise<QueueInfo>
+   */
+  async getQueueInfo(astrologerId: string): Promise<QueueInfo> {
+    const response = await apiClient.get<ApiResponse<QueueInfo>>(
+      API_ENDPOINTS.CALL.QUEUE_INFO(astrologerId)
+    );
+    return response.data!;
+  }
+
+  /**
+   * Join an astrologer's queue
+   * Max 10 users, 10 min timeout
+   * @param astrologerId - Astrologer ID
+   * @returns Promise<JoinQueueResponse>
+   */
+  async joinQueue(astrologerId: string): Promise<JoinQueueResponse> {
+    const response = await apiClient.post<ApiResponse<JoinQueueResponse>>(
+      API_ENDPOINTS.CALL.QUEUE_JOIN,
+      { astrologerId }
+    );
+    return response.data!;
+  }
+
+  /**
+   * Get all queue entries for current user
+   * @returns Promise<QueueEntry[]>
+   */
+  async getQueueStatus(): Promise<QueueEntry[]> {
+    const response = await apiClient.get<ApiResponse<QueueEntry[]>>(
+      API_ENDPOINTS.CALL.QUEUE_STATUS
+    );
+    return response.data || [];
+  }
+
+  /**
+   * Get queue position for specific astrologer
+   * @param astrologerId - Astrologer ID
+   * @returns Promise<QueueEntry | null>
+   */
+  async getQueuePosition(astrologerId: string): Promise<QueueEntry | null> {
+    const response = await apiClient.get<ApiResponse<QueueEntry>>(
+      API_ENDPOINTS.CALL.QUEUE_POSITION(astrologerId)
+    );
+    return response.data || null;
+  }
+
+  /**
+   * Leave a queue
+   * @param queueId - Queue entry ID
+   * @returns Promise<void>
+   */
+  async leaveQueue(queueId: string): Promise<void> {
+    await apiClient.post<ApiResponse<void>>(
+      API_ENDPOINTS.CALL.QUEUE_LEAVE(queueId)
+    );
+  }
+
+  /**
+   * Initiate call when turn comes in queue
+   * @param queueId - Queue entry ID
+   * @returns Promise<CreateCallRequestResponse>
+   */
+  async callNowFromQueue(queueId: string): Promise<CreateCallRequestResponse> {
+    const response = await apiClient.post<ApiResponse<CreateCallRequestResponse>>(
+      API_ENDPOINTS.CALL.QUEUE_CALL_NOW(queueId)
+    );
+    return response.data!;
+  }
+
+  // ==================== Session Management ====================
+
+  /**
+   * Start a new call session (legacy - use createCallRequest for new flow)
    * @param data - Session creation data
    * @returns Promise<ChatSession>
    */
@@ -93,13 +229,13 @@ class CallService {
   /**
    * End a call session
    * @param sessionId - Session ID
-   * @param data - End session data
-   * @returns Promise<any>
+   * @param endReason - Reason for ending
+   * @returns Promise<EndCallResponse>
    */
-  async endSession(sessionId: string, data?: EndSessionData): Promise<any> {
-    const response = await apiClient.post<ApiResponse<any>>(
+  async endSession(sessionId: string, endReason?: string): Promise<EndCallResponse> {
+    const response = await apiClient.post<ApiResponse<EndCallResponse>>(
       API_ENDPOINTS.CALL.END_SESSION(sessionId),
-      data
+      { endReason }
     );
     return response.data!;
   }
@@ -119,28 +255,20 @@ class CallService {
   /**
    * Rate a completed call session
    * @param sessionId - Session ID
-   * @param rating - Rating (1-5)
-   * @param review - Review text (optional)
-   * @param tags - Review tags (optional)
-   * @returns Promise<any>
+   * @param data - Rating data
+   * @returns Promise<void>
    */
-  async rateSession(
-    sessionId: string,
-    rating: number,
-    review?: string,
-    tags?: string[]
-  ): Promise<any> {
-    const response = await apiClient.post<ApiResponse<any>>(
+  async rateSession(sessionId: string, data: CallRatingRequest): Promise<void> {
+    await apiClient.post<ApiResponse<void>>(
       API_ENDPOINTS.CALL.RATING(sessionId),
-      { rating, review, tags }
+      data
     );
-    return response.data!;
   }
 
   /**
    * Get call session history
    * @param filters - Filter options
-   * @returns Promise<ChatSession[]>
+   * @returns Promise<{ data: ChatSession[]; pagination: Pagination }>
    */
   async getSessionHistory(filters?: {
     status?: 'active' | 'completed' | 'cancelled';
