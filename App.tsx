@@ -156,6 +156,7 @@ const Navigation = () => {
         screenOptions={{
           headerShown: false,
           animation: 'ios_from_right', // Native iOS push with parallax effect
+          animationDuration: 200, // Faster, premium feel (default ~350ms)
           gestureEnabled: true, // Enable swipe-to-go-back gesture
           gestureDirection: 'horizontal',
         }}
