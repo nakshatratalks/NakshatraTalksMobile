@@ -114,9 +114,23 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
   );
 
   // Set status bar to light when screen is focused (dark background needs light icons)
+  // This runs every time the screen gains focus
   useFocusEffect(
     useCallback(() => {
       setStatusBarStyle('light');
+
+      // Also set light when returning from background
+      const handleAppStateChange = (nextAppState: string) => {
+        if (nextAppState === 'active') {
+          setStatusBarStyle('light');
+        }
+      };
+
+      const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+      return () => {
+        subscription.remove();
+      };
     }, [])
   );
 
@@ -158,6 +172,8 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
       (e) => {
         const height = e.endCoordinates.height;
         setKeyboardHeight(height);
+        // Ensure status bar stays light when keyboard appears
+        setStatusBarStyle('light');
         Animated.timing(keyboardHeightAnim, {
           toValue: height,
           duration: Platform.OS === 'ios' ? 250 : 200,
@@ -170,6 +186,8 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
       Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
       () => {
         setKeyboardHeight(0);
+        // Ensure status bar stays light when keyboard hides
+        setStatusBarStyle('light');
         Animated.timing(keyboardHeightAnim, {
           toValue: 0,
           duration: Platform.OS === 'ios' ? 250 : 200,
@@ -403,6 +421,9 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
 
   // Toggle UI visibility with tap
   const handleScreenTap = () => {
+    // Ensure status bar stays light on any screen interaction
+    setStatusBarStyle('light');
+
     // Dismiss keyboard if open
     if (keyboardHeight > 0) {
       Keyboard.dismiss();
@@ -634,6 +655,8 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
                 editable={canSendMessage && !sending}
                 returnKeyType="send"
                 onSubmitEditing={handleSendMessage}
+                onFocus={() => setStatusBarStyle('light')}
+                onBlur={() => setStatusBarStyle('light')}
               />
               {rateLimitSeconds > 0 && (
                 <Text style={[styles.rateLimitText, { fontSize: 12 * scale }]}>

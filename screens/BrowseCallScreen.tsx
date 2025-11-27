@@ -155,11 +155,10 @@ const BrowseCallScreen = ({ navigation }: any) => {
   };
 
   // 3D Sidebar animation effect with content fade
+  // Note: Status bar is managed by the Sidebar component itself
   useEffect(() => {
     const SIDEBAR_WIDTH = screenWidth * 0.75;
     if (sidebarVisible) {
-      // Set status bar to light when sidebar opens (dark sidebar background)
-      setStatusBarStyle('light');
       Animated.parallel([
         Animated.timing(screenScale, {
           toValue: 0.85,
@@ -181,8 +180,6 @@ const BrowseCallScreen = ({ navigation }: any) => {
         }),
       ]).start();
     } else {
-      // Set status bar back to dark when sidebar closes (white background)
-      setStatusBarStyle('dark');
       Animated.parallel([
         Animated.timing(screenScale, {
           toValue: 1,

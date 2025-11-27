@@ -201,11 +201,10 @@ const HomeScreen = ({ navigation }: any) => {
   };
 
   // 3D Sidebar animation effect with content fade - Reanimated
+  // Note: Status bar is managed by the Sidebar component itself
   useEffect(() => {
     const SIDEBAR_WIDTH = screenWidth * 0.75;
     if (sidebarVisible) {
-      // Set status bar to light when sidebar opens (dark sidebar background)
-      setStatusBarStyle('light');
       screenScale.value = withTiming(0.85, {
         duration: 350,
         easing: Easing.bezier(0.25, 0.1, 0.25, 1),
@@ -219,8 +218,6 @@ const HomeScreen = ({ navigation }: any) => {
         easing: Easing.bezier(0.25, 0.1, 0.25, 1),
       });
     } else {
-      // Set status bar back to dark when sidebar closes (white background)
-      setStatusBarStyle('dark');
       screenScale.value = withTiming(1, {
         duration: 300,
         easing: Easing.bezier(0.25, 0.1, 0.25, 1),

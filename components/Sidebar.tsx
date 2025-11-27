@@ -6,9 +6,10 @@ import {
   TouchableOpacity,
   Animated,
   Dimensions,
-  StatusBar,
+  StatusBar as RNStatusBar,
   Platform,
 } from 'react-native';
+import { StatusBar, setStatusBarStyle } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { Lexend_500Medium, Lexend_600SemiBold } from '@expo-google-fonts/lexend';
@@ -58,6 +59,9 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
 
   useEffect(() => {
     if (visible) {
+      // Set status bar to light when sidebar opens (dark sidebar background)
+      setStatusBarStyle('light');
+
       // Smooth slide in and fade in animation
       Animated.parallel([
         Animated.timing(slideAnim, {
@@ -77,6 +81,9 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
         }),
       ]).start();
     } else {
+      // Set status bar back to dark when sidebar closes
+      setStatusBarStyle('dark');
+
       // Smooth slide out and fade out animation
       Animated.parallel([
         Animated.timing(slideAnim, {
@@ -198,6 +205,9 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
 
   return (
     <View style={styles.container}>
+      {/* Force light status bar icons when sidebar is visible */}
+      <StatusBar style="light" />
+
       {/* Overlay */}
       <Animated.View
         style={[
@@ -375,7 +385,7 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight : 0,
   },
   decorativeBackground: {
     position: 'absolute',
@@ -389,7 +399,7 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     position: 'absolute',
-    top: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 20 : 20,
+    top: Platform.OS === 'android' ? (RNStatusBar.currentHeight || 0) + 20 : 20,
     left: 19,
     width: 26,
     height: 26,
@@ -399,7 +409,7 @@ const styles = StyleSheet.create({
   },
   menuContainer: {
     flex: 1,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 60 : 60,
+    paddingTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight || 0) + 60 : 60,
     paddingLeft: 16,
     paddingRight: 16,
     zIndex: 1,
