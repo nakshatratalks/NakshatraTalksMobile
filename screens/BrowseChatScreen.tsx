@@ -52,6 +52,7 @@ import {
   BookOpen,
   Crown,
   BadgeCheck,
+  History,
 } from 'lucide-react-native';
 import { useResponsiveLayout } from '../src/utils/responsive';
 import { useBrowseChatData } from '../src/hooks/useBrowseChatData';
@@ -353,8 +354,11 @@ const BrowseChatScreen = ({ navigation }: any) => {
                     </Text>
                   </AnimatedButton>
 
-                  <AnimatedButton style={[styles.bellButton, { width: 32 * scale, height: 32 * scale }]}>
-                    <Bell size={24 * scale} color="#2930A6" />
+                  <AnimatedButton
+                    style={[styles.bellButton, { width: 32 * scale, height: 32 * scale }]}
+                    onPress={() => navigation.navigate('ChatHistory')}
+                  >
+                    <History size={24 * scale} color="#2930A6" strokeWidth={2} />
                   </AnimatedButton>
                 </View>
               </View>

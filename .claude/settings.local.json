@@ -28,7 +28,8 @@
       "Bash(npm cache clean:*)",
       "Bash(npm ls:*)",
       "Bash(npm uninstall:*)",
-      "Bash(npx expo start:*)"
+      "Bash(npx expo start:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

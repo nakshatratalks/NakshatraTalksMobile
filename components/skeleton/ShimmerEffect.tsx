@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet } from 'react-native';
+import { Animated, StyleSheet, ViewStyle, DimensionValue } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 interface ShimmerEffectProps {
@@ -45,11 +45,11 @@ export const ShimmerEffect: React.FC<ShimmerEffectProps> = ({
       style={[
         styles.container,
         {
-          width,
-          height,
+          width: width as DimensionValue,
+          height: height as DimensionValue,
           borderRadius,
           overflow: 'hidden',
-        },
+        } as ViewStyle,
       ]}
     >
       <Animated.View

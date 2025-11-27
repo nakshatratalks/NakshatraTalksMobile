@@ -181,8 +181,9 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   const barHeight = BAR_HEIGHT_BASE * scale;
 
   const handleNav = (screen: string, index: number) => {
-    // Always navigate - tab navigator handles if already on that tab
-    navigation.navigate(screen);
+    // Navigate to nested tab screen inside MainTabs
+    // This works from both inside and outside the tab navigator
+    navigation.navigate('MainTabs', { screen });
   };
 
   return (

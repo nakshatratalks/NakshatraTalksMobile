@@ -41,6 +41,8 @@ import ChatInterfaceScreen from './screens/ChatInterfaceScreen';
 import LiveSessionScreen from './screens/LiveSessionScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import AstrologerDetailsScreen from './screens/AstrologerDetailsScreen';
+import ChatHistoryScreen from './screens/ChatHistoryScreen';
+import ChatHistoryViewScreen from './screens/ChatHistoryViewScreen';
 
 // Create Navigators
 const Stack = createNativeStackNavigator();
@@ -153,7 +155,9 @@ const Navigation = () => {
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
-          animation: 'slide_from_right',
+          animation: 'ios_from_right', // Native iOS push with parallax effect
+          gestureEnabled: true, // Enable swipe-to-go-back gesture
+          gestureDirection: 'horizontal',
         }}
       >
         {!isAuthenticated ? (
@@ -173,22 +177,22 @@ const Navigation = () => {
                 animation: 'none', // No animation for initial load
               }}
             />
-            {/* Detail Screens - push on top of tabs */}
+            {/* Detail Screens - push on top of tabs with native animation */}
             <Stack.Screen
               name="ChatInterface"
               component={ChatInterfaceScreen}
-              options={{
-                animation: 'slide_from_right',
-                animationDuration: 250,
-              }}
             />
             <Stack.Screen
               name="AstrologerDetails"
               component={AstrologerDetailsScreen}
-              options={{
-                animation: 'slide_from_right',
-                animationDuration: 250,
-              }}
+            />
+            <Stack.Screen
+              name="ChatHistory"
+              component={ChatHistoryScreen}
+            />
+            <Stack.Screen
+              name="ChatHistoryView"
+              component={ChatHistoryViewScreen}
             />
           </>
         )}
