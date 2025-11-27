@@ -3,7 +3,8 @@
  * Displays and allows editing of user profile information
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -19,7 +20,7 @@ import {
   Modal,
   Platform,
 } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
+import { StatusBar, setStatusBarStyle } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -107,6 +108,16 @@ const ProfileScreen = ({ navigation }: any) => {
 
   // No mount animation needed - screens stay mounted via Tab Navigator
   // Values are already initialized to final state
+
+  // Set status bar based on sidebar state when screen is focused
+  // Only set dark if sidebar is NOT open, to avoid overriding sidebar's light status bar
+  useFocusEffect(
+    useCallback(() => {
+      if (!sidebarVisible) {
+        setStatusBarStyle('dark');
+      }
+    }, [sidebarVisible])
+  );
 
   // Handle refresh
   const handleRefresh = async () => {

@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -13,7 +14,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
+import { StatusBar, setStatusBarStyle } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import {
@@ -121,6 +122,16 @@ const BrowseCallScreen = ({ navigation }: any) => {
 
   const { cardWidth, scale } = useResponsiveLayout();
 
+  // Set status bar based on sidebar state when screen is focused
+  // Only set dark if sidebar is NOT open, to avoid overriding sidebar's light status bar
+  useFocusEffect(
+    useCallback(() => {
+      if (!sidebarVisible) {
+        setStatusBarStyle('dark');
+      }
+    }, [sidebarVisible])
+  );
+
   // No mount animation needed - screens stay mounted via Tab Navigator
   // All animation values are already initialized to their final state
 
@@ -147,6 +158,8 @@ const BrowseCallScreen = ({ navigation }: any) => {
   useEffect(() => {
     const SIDEBAR_WIDTH = screenWidth * 0.75;
     if (sidebarVisible) {
+      // Set status bar to light when sidebar opens (dark sidebar background)
+      setStatusBarStyle('light');
       Animated.parallel([
         Animated.timing(screenScale, {
           toValue: 0.85,
@@ -168,6 +181,8 @@ const BrowseCallScreen = ({ navigation }: any) => {
         }),
       ]).start();
     } else {
+      // Set status bar back to dark when sidebar closes (white background)
+      setStatusBarStyle('dark');
       Animated.parallel([
         Animated.timing(screenScale, {
           toValue: 1,

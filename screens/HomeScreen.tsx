@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -30,7 +31,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
-import { StatusBar } from 'expo-status-bar';
+import { StatusBar, setStatusBarStyle } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import {
@@ -177,6 +178,16 @@ const HomeScreen = ({ navigation }: any) => {
     }
   }, [fontsLoaded]);
 
+  // Set status bar based on sidebar state when HomeScreen is focused
+  // Only set dark if sidebar is NOT open, to avoid overriding sidebar's light status bar
+  useFocusEffect(
+    useCallback(() => {
+      if (!sidebarVisible) {
+        setStatusBarStyle('dark');
+      }
+    }, [sidebarVisible])
+  );
+
   // Search focus animation with haptics
   const handleSearchFocus = () => {
     setSearchFocused(true);
@@ -193,6 +204,8 @@ const HomeScreen = ({ navigation }: any) => {
   useEffect(() => {
     const SIDEBAR_WIDTH = screenWidth * 0.75;
     if (sidebarVisible) {
+      // Set status bar to light when sidebar opens (dark sidebar background)
+      setStatusBarStyle('light');
       screenScale.value = withTiming(0.85, {
         duration: 350,
         easing: Easing.bezier(0.25, 0.1, 0.25, 1),
@@ -206,6 +219,8 @@ const HomeScreen = ({ navigation }: any) => {
         easing: Easing.bezier(0.25, 0.1, 0.25, 1),
       });
     } else {
+      // Set status bar back to dark when sidebar closes (white background)
+      setStatusBarStyle('dark');
       screenScale.value = withTiming(1, {
         duration: 300,
         easing: Easing.bezier(0.25, 0.1, 0.25, 1),
@@ -988,7 +1003,7 @@ const CategoryIcon = ({ iconImage, label, scale }: any) => {
       backgroundColor: interpolateColor(
         brightnessValue.value,
         [0, 1],
-        ['#FFCF0D', '#FFE066']
+        ['#FFFFFF', '#FFFEF5']
       ),
     };
   });
@@ -1180,7 +1195,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 207, 13, 0.4)',
   },
   categoryIconCircle: {
-    backgroundColor: '#FFCF0D',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#FFCF0D',
@@ -1188,8 +1203,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
+    borderWidth: 2,
+    borderColor: '#FFCF0D',
   },
   categoryLabel: {
     fontFamily: 'Poppins_500Medium',

@@ -19,7 +19,7 @@ import {
   BackHandler,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { StatusBar } from 'expo-status-bar';
+import { StatusBar, setStatusBarStyle } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import {
@@ -111,6 +111,13 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
         subscription.remove();
       };
     }, [navigateBack])
+  );
+
+  // Set status bar to light when screen is focused (dark background needs light icons)
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle('light');
+    }, [])
   );
 
   const [sessions, setSessions] = useState<LiveSession[]>([]);
@@ -431,6 +438,8 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
         leaveCurrentSession();
         setCurrentIndex(newIndex);
         setChatMessages([]);
+        // Ensure status bar stays light during scroll transitions
+        setStatusBarStyle('light');
       }
     }
   }).current;
@@ -438,6 +447,11 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 50,
   }).current;
+
+  // Ensure status bar stays light during any scroll activity
+  const handleScrollBeginDrag = useCallback(() => {
+    setStatusBarStyle('light');
+  }, []);
 
   if (!fontsLoaded || loading) {
     return (
@@ -451,10 +465,17 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
     return null;
   }
 
+  // Calculate usable screen height accounting for safe areas
+  const usableHeight = screenHeight - insets.top;
+
+  // Calculate responsive chat positions based on screen height
+  const chatInputHeight = 54 * scale + Math.max(20 * scale, insets.bottom + 10 * scale) + 12 * scale + 20; // input + padding + top padding + extra space
+  const chatContainerBottom = chatInputHeight + 10 * scale; // Position above chat input
+
   // Render individual live session
   const renderLiveSession = ({ item, index }: { item: LiveSession; index: number }) => (
     <TouchableWithoutFeedback onPress={handleScreenTap}>
-      <View style={styles.sessionContainer}>
+      <View style={[styles.sessionContainer, { height: usableHeight }]}>
         {/* Background Video/Image */}
         <Image
           source={
@@ -561,6 +582,7 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
             styles.chatContainer,
             {
               paddingHorizontal: 20 * scale,
+              bottom: chatContainerBottom,
               opacity: uiOpacityAnim,
               transform: [
                 {
@@ -651,14 +673,21 @@ const LiveSessionScreen = ({ navigation, route }: any) => {
           data={sessions}
           renderItem={renderLiveSession}
           keyExtractor={(item) => item.id}
-          pagingEnabled
+          pagingEnabled={true}
           showsVerticalScrollIndicator={false}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
-          snapToInterval={screenHeight}
-          decelerationRate="fast"
+          decelerationRate="normal"
           bounces={false}
           scrollEnabled={sessions.length > 1}
+          disableIntervalMomentum={true}
+          snapToAlignment="start"
+          onScrollBeginDrag={handleScrollBeginDrag}
+          getItemLayout={(data, index) => ({
+            length: usableHeight,
+            offset: usableHeight * index,
+            index,
+          })}
         />
       </Animated.View>
     </SafeAreaView>
@@ -739,27 +768,27 @@ const styles = StyleSheet.create({
   },
   sessionContainer: {
     width: screenWidth,
-    height: screenHeight,
+    // height is set dynamically in component based on safe area insets
     backgroundColor: '#000000',
   },
   backgroundImage: {
     position: 'absolute',
-    width: screenWidth,
-    height: screenHeight,
+    width: '100%',
+    height: '100%',
   },
   topGradient: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 180,
+    height: '25%', // Responsive height
   },
   bottomGradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 350,
+    height: '45%', // Responsive height
   },
   topBar: {
     position: 'absolute',
@@ -846,7 +875,7 @@ const styles = StyleSheet.create({
   },
   chatContainer: {
     position: 'absolute',
-    bottom: 170,
+    // bottom is set dynamically in component based on chat input height
     left: 0,
     right: 0,
     zIndex: 5,
