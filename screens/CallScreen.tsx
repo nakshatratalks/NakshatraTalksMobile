@@ -46,6 +46,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useCallFlow } from '../src/hooks/useCallFlow';
 import { CallScreenParams, CallScreenState } from '../src/types/call.types';
 import { Astrologer } from '../src/types/api.types';
+import RatingModal from '../components/RatingModal';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -90,8 +91,8 @@ const CallScreen = ({ navigation, route }: any) => {
   // Local state
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
-  const [rating, setRating] = useState(0);
-  const [review, setReview] = useState('');
+  const [pendingRating, setPendingRating] = useState<{ rating: number; review?: string } | null>(null);
+  const [showRatingModal, setShowRatingModal] = useState(false);
   const [showQueueOption, setShowQueueOption] = useState(false);
 
   // Animations
@@ -199,44 +200,26 @@ const CallScreen = ({ navigation, route }: any) => {
     navigation.goBack();
   };
 
-  // Handle end call
+  // Handle end call - show rating modal first
   const handleEndCall = async () => {
+    setShowRatingModal(true);
+  };
+
+  // Handle rating submission from modal
+  const handleRatingSubmit = async (rating: number, review?: string) => {
+    setPendingRating({ rating, review });
+    setShowRatingModal(false);
+    // Now actually end the call and transition to summary
     await endCall('user_ended');
   };
 
-  // Handle go home
-  const handleGoHome = () => {
+  // Handle go home - submit rating to API and navigate
+  const handleGoHome = async () => {
+    if (pendingRating) {
+      await rateCall(pendingRating.rating, pendingRating.review);
+    }
     goHome();
     navigation.goBack();
-  };
-
-  // Handle submit rating
-  const handleSubmitRating = async () => {
-    if (rating > 0) {
-      await rateCall(rating, review);
-    }
-    handleGoHome();
-  };
-
-  // Render star rating
-  const renderStars = () => {
-    return (
-      <View style={styles.starsContainer}>
-        {[1, 2, 3, 4, 5].map((star) => (
-          <TouchableOpacity
-            key={star}
-            onPress={() => setRating(star)}
-            style={styles.starButton}
-          >
-            <Star
-              size={28}
-              color={star <= rating ? '#FFD700' : '#D1D5DB'}
-              fill={star <= rating ? '#FFD700' : 'transparent'}
-            />
-          </TouchableOpacity>
-        ))}
-      </View>
-    );
   };
 
   if (!fontsLoaded) {
@@ -415,86 +398,101 @@ const CallScreen = ({ navigation, route }: any) => {
   // ==================== ACTIVE CALL STATE ====================
   if (state === 'active' || state === 'connecting') {
     return (
-      <LinearGradient
-        colors={['#8B7FD4', '#C9B896', '#E8DCC8']}
-        style={styles.container}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      >
-        <StatusBar style="dark" />
-        <SafeAreaView style={styles.safeArea}>
-          <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-            {/* Status Text */}
-            <Text style={styles.statusText}>Call Active</Text>
-            <Text style={styles.timerText}>{formatTime(callDurationSeconds)}</Text>
+      <>
+        <LinearGradient
+          colors={['#8B7FD4', '#C9B896', '#E8DCC8']}
+          style={styles.container}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        >
+          <StatusBar style="dark" />
+          <SafeAreaView style={styles.safeArea}>
+            <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+              {/* Status Text */}
+              <Text style={styles.statusText}>Call Active</Text>
+              <Text style={styles.timerText}>{formatTime(callDurationSeconds)}</Text>
 
-            {/* Avatar */}
-            <View style={styles.avatarContainer}>
-              <View style={[styles.ring, styles.ringMiddle, styles.activeRing]} />
-              <View style={styles.avatarWrapper}>
-                <Image
-                  source={{ uri: astrologer.image }}
-                  style={styles.avatar}
-                />
+              {/* Avatar */}
+              <View style={styles.avatarContainer}>
+                <View style={[styles.ring, styles.ringMiddle, styles.activeRing]} />
+                <View style={styles.avatarWrapper}>
+                  <Image
+                    source={{ uri: astrologer.image }}
+                    style={styles.avatar}
+                  />
+                </View>
               </View>
-            </View>
 
-            {/* Name */}
-            <Text style={styles.nameText}>{astrologer.name}</Text>
+              {/* Name */}
+              <Text style={styles.nameText}>{astrologer.name}</Text>
 
-            {/* Cost info */}
-            <View style={styles.costContainer}>
-              <IndianRupee size={14} color="#595959" />
-              <Text style={styles.costText}>
-                {((callDurationSeconds / 60) * (sessionData?.pricePerMinute || astrologer.callPricePerMinute || astrologer.pricePerMinute)).toFixed(2)}
-              </Text>
-            </View>
+              {/* Cost info */}
+              <View style={styles.costContainer}>
+                <IndianRupee size={14} color="#595959" />
+                <Text style={styles.costText}>
+                  {((callDurationSeconds / 60) * (sessionData?.pricePerMinute || astrologer.callPricePerMinute || astrologer.pricePerMinute)).toFixed(2)}
+                </Text>
+              </View>
 
-            {/* Call controls */}
-            <View style={styles.callControls}>
-              <TouchableOpacity
-                style={[
-                  styles.controlButton,
-                  isMuted && styles.controlButtonActive,
-                ]}
-                onPress={() => setIsMuted(!isMuted)}
-              >
-                {isMuted ? (
-                  <MicOff size={24} color={isMuted ? '#fff' : '#333'} />
-                ) : (
-                  <Mic size={24} color="#333" />
-                )}
-              </TouchableOpacity>
+              {/* Call controls */}
+              <View style={styles.callControls}>
+                <TouchableOpacity
+                  style={[
+                    styles.controlButton,
+                    isMuted && styles.controlButtonActive,
+                  ]}
+                  onPress={() => setIsMuted(!isMuted)}
+                >
+                  {isMuted ? (
+                    <MicOff size={24} color={isMuted ? '#fff' : '#333'} />
+                  ) : (
+                    <Mic size={24} color="#333" />
+                  )}
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.actionButton, styles.endCallButton]}
-                onPress={handleEndCall}
-              >
-                <PhoneOff size={28} color="#fff" />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.endCallButton]}
+                  onPress={handleEndCall}
+                >
+                  <PhoneOff size={28} color="#fff" />
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.controlButton,
-                  isSpeakerOn && styles.controlButtonActive,
-                ]}
-                onPress={() => setIsSpeakerOn(!isSpeakerOn)}
-              >
-                {isSpeakerOn ? (
-                  <Volume2 size={24} color={isSpeakerOn ? '#fff' : '#333'} />
-                ) : (
-                  <VolumeX size={24} color="#333" />
-                )}
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        </SafeAreaView>
-      </LinearGradient>
+                <TouchableOpacity
+                  style={[
+                    styles.controlButton,
+                    isSpeakerOn && styles.controlButtonActive,
+                  ]}
+                  onPress={() => setIsSpeakerOn(!isSpeakerOn)}
+                >
+                  {isSpeakerOn ? (
+                    <Volume2 size={24} color={isSpeakerOn ? '#fff' : '#333'} />
+                  ) : (
+                    <VolumeX size={24} color="#333" />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          </SafeAreaView>
+        </LinearGradient>
+
+        {/* Rating Modal */}
+        <RatingModal
+          visible={showRatingModal}
+          onSubmit={handleRatingSubmit}
+          onClose={() => handleRatingSubmit(3, undefined)}
+          sessionType="call"
+        />
+      </>
     );
   }
 
   // ==================== SUMMARY STATE ====================
   if (state === 'summary') {
+    // Get rating config for display
+    const RATING_LABELS = ['Bad', 'Okay', 'Good', 'Very Good', 'Excellent'];
+    const ratingValue = pendingRating?.rating || 3;
+    const ratingLabel = RATING_LABELS[ratingValue - 1];
+
     return (
       <View style={styles.summaryContainer}>
         <StatusBar style="dark" />
@@ -543,32 +541,35 @@ const CallScreen = ({ navigation, route }: any) => {
             </View>
           </View>
 
-          {/* Rating */}
+          {/* Rating Display */}
           <View style={styles.ratingSection}>
             <Text style={styles.ratingLabel}>Your Rating</Text>
-            {renderStars()}
+            <View style={styles.starsContainer}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Star
+                  key={star}
+                  size={24}
+                  color={star <= ratingValue ? '#FFD700' : '#D1D5DB'}
+                  fill={star <= ratingValue ? '#FFD700' : 'transparent'}
+                />
+              ))}
+            </View>
           </View>
 
-          {/* Review */}
-          <View style={styles.reviewSection}>
-            <Text style={styles.reviewLabel}>Your Review</Text>
-            <TextInput
-              style={styles.reviewInput}
-              placeholder="Share your experience..."
-              placeholderTextColor="#999"
-              multiline
-              numberOfLines={3}
-              value={review}
-              onChangeText={setReview}
-            />
-          </View>
+          {/* Review Display */}
+          {pendingRating?.review && (
+            <View style={styles.reviewSection}>
+              <Text style={styles.reviewLabel}>Your Review</Text>
+              <Text style={styles.reviewText}>{pendingRating.review}</Text>
+            </View>
+          )}
         </View>
 
         {/* Submit button */}
         <View style={styles.summaryButtonContainer}>
           <TouchableOpacity
             style={styles.homeButton}
-            onPress={handleSubmitRating}
+            onPress={handleGoHome}
           >
             <Text style={styles.homeButtonText}>Go to Home</Text>
           </TouchableOpacity>
@@ -887,9 +888,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 4,
   },
-  starButton: {
-    padding: 2,
-  },
 
   // Review
   reviewSection: {
@@ -901,13 +899,11 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 8,
   },
-  reviewInput: {
+  reviewText: {
     fontFamily: 'Lexend_300Light',
     fontSize: 12,
     color: '#404040',
     lineHeight: 18,
-    minHeight: 60,
-    textAlignVertical: 'top',
   },
 
   // Home button

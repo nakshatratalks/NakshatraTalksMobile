@@ -32,6 +32,7 @@ import MessageInput from '../components/chat/MessageInput';
 import DateSeparator from '../components/chat/DateSeparator';
 import TypingIndicator from '../components/chat/TypingIndicator';
 import SessionEndModal from '../components/chat/SessionEndModal';
+import RatingModal from '../components/RatingModal';
 import { chatService } from '../src/services';
 import NotificationService from '../src/utils/notificationService';
 
@@ -65,12 +66,15 @@ const ChatInterfaceScreen: React.FC<ChatInterfaceScreenProps> = ({
     initialSession,
     astrologer,
     onSessionEnd: () => {
-      setShowEndModal(true);
+      // Show rating modal first, then end modal
+      setShowRatingModal(true);
     },
   });
 
   const { scale } = useResponsiveLayout();
+  const [showRatingModal, setShowRatingModal] = useState(false);
   const [showEndModal, setShowEndModal] = useState(false);
+  const [pendingRating, setPendingRating] = useState<{ rating: number; review?: string } | null>(null);
   const [showTyping, setShowTyping] = useState(false);
   const [lastActivityTime, setLastActivityTime] = useState(Date.now());
   const [sessionStartTime] = useState(Date.now());
@@ -308,11 +312,21 @@ const ChatInterfaceScreen: React.FC<ChatInterfaceScreenProps> = ({
     });
   });
 
-  // Handle rating submission
+  // Handle rating submission from RatingModal
+  const handleRatingModalSubmit = (rating: number, review?: string) => {
+    setPendingRating({ rating, review });
+    setShowRatingModal(false);
+    setShowEndModal(true);
+  };
+
+  // Handle final submission from SessionEndModal (Go to Home)
   const handleRating = async (rating: number, review: string, tags: string[]) => {
     try {
       if (session?.id) {
-        await chatService.rateSession(session.id, rating, review, tags);
+        // Use pending rating if available, otherwise use passed values
+        const finalRating = pendingRating?.rating || rating;
+        const finalReview = pendingRating?.review || review;
+        await chatService.rateSession(session.id, finalRating, finalReview, tags);
       }
       setShowEndModal(false);
       navigation.goBack();
@@ -465,7 +479,15 @@ const ChatInterfaceScreen: React.FC<ChatInterfaceScreenProps> = ({
         </KeyboardAvoidingView>
       </SafeAreaView>
 
-      {/* Session End Modal */}
+      {/* Rating Modal - shows first after session ends */}
+      <RatingModal
+        visible={showRatingModal}
+        onSubmit={handleRatingModalSubmit}
+        onClose={() => handleRatingModalSubmit(3, undefined)}
+        sessionType="chat"
+      />
+
+      {/* Session End Modal - shows after rating is submitted */}
       {session && (
         <SessionEndModal
           visible={showEndModal}
@@ -473,6 +495,7 @@ const ChatInterfaceScreen: React.FC<ChatInterfaceScreenProps> = ({
           totalCost={session.totalCost || sessionCost}
           duration={(session.duration || duration / 60)}
           remainingBalance={remainingBalance}
+          pendingRating={pendingRating}
           onRate={handleRating}
           onClose={() => {
             setShowEndModal(false);

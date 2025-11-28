@@ -22,6 +22,7 @@ interface SessionEndModalProps {
   totalCost: number;
   duration: number; // in minutes
   remainingBalance?: number;
+  pendingRating?: { rating: number; review?: string } | null;
   onRate: (rating: number, review: string, tags: string[]) => void;
   onClose: () => void;
 }
@@ -34,6 +35,7 @@ const SessionEndModal: React.FC<SessionEndModalProps> = ({
   totalCost,
   duration,
   remainingBalance,
+  pendingRating,
   onRate,
   onClose,
 }) => {
@@ -43,6 +45,14 @@ const SessionEndModal: React.FC<SessionEndModalProps> = ({
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
+
+  // Pre-populate from pendingRating when modal opens
+  useEffect(() => {
+    if (visible && pendingRating) {
+      setRating(pendingRating.rating);
+      setReview(pendingRating.review || '');
+    }
+  }, [visible, pendingRating]);
 
   useEffect(() => {
     if (visible) {

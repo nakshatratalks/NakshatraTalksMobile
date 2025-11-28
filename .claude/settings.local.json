@@ -29,7 +29,9 @@
       "Bash(npm ls:*)",
       "Bash(npm uninstall:*)",
       "Bash(npx expo start:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(npx expo export --platform web --output-dir /dev/null)",
+      "Bash(node -e:*)"
     ],
     "deny": [],
     "ask": []
