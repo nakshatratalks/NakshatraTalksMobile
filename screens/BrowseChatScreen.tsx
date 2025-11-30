@@ -347,6 +347,7 @@ const BrowseChatScreen = ({ navigation }: any) => {
                       borderRadius: 20 * scale,
                       paddingHorizontal: 14 * scale
                     }]}
+                    onPress={() => navigation.navigate('Wallet')}
                   >
                     <IndianRupee size={18 * scale} color="#FFFFFF" />
                     <Text style={[styles.walletText, { fontSize: 16 * scale }]}>
@@ -524,6 +525,7 @@ const BrowseChatScreen = ({ navigation }: any) => {
       <Sidebar
         visible={sidebarVisible}
         onClose={() => setSidebarVisible(false)}
+        navigation={navigation}
       />
 
       {/* Insufficient Balance Modal */}

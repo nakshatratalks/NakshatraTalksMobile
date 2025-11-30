@@ -10,3 +10,11 @@ export { LiveSessionListSkeleton } from './LiveSessionListSkeleton';
 export { ChatHistoryItemSkeleton } from './ChatHistoryItemSkeleton';
 export { ChatHistoryViewSkeleton } from './ChatHistoryViewSkeleton';
 export { CallHistoryItemSkeleton } from './CallHistoryItemSkeleton';
+export {
+  WalletBalanceSkeleton,
+  WalletStatsSkeleton,
+  FilterTabsSkeleton,
+  TransactionItemSkeleton,
+  WalletScreenSkeleton,
+  RechargeOptionsSkeleton,
+} from './WalletSkeleton';

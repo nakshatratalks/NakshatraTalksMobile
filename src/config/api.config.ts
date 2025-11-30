@@ -56,8 +56,15 @@ export const API_ENDPOINTS = {
   // Wallet
   WALLET: {
     BALANCE: '/api/v1/wallet/balance',
-    RECHARGE: '/api/v1/wallet/recharge',
+    SUMMARY: '/api/v1/wallet/summary',
+    RECHARGE_OPTIONS: '/api/v1/wallet/recharge-options',
+    RECHARGE_INITIATE: '/api/v1/wallet/recharge/initiate',
+    RECHARGE_VERIFY: '/api/v1/wallet/recharge/verify',
+    RECHARGE: '/api/v1/wallet/recharge', // Legacy endpoint
     TRANSACTIONS: '/api/v1/wallet/transactions',
+    RECHARGES: '/api/v1/wallet/recharges',
+    PENDING_ORDERS: '/api/v1/wallet/orders/pending',
+    CANCEL_ORDER: (orderId: string) => `/api/v1/wallet/orders/${orderId}/cancel`,
   },
 
   // Content

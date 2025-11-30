@@ -415,6 +415,7 @@ const HomeScreen = ({ navigation }: any) => {
                   borderRadius: 15 * scale,
                   paddingHorizontal: 12 * scale
                 }]}
+                onPress={() => navigation.navigate('Wallet')}
               >
                 <IndianRupee size={16 * scale} color="#FFFFFF" />
                 <Text style={[styles.walletText, { fontSize: 14 * scale }]}>
@@ -715,6 +716,7 @@ const HomeScreen = ({ navigation }: any) => {
       <Sidebar
         visible={sidebarVisible}
         onClose={() => setSidebarVisible(false)}
+        navigation={navigation}
       />
     </>
   );

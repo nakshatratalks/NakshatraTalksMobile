@@ -308,6 +308,7 @@ const ProfileScreen = ({ navigation }: any) => {
       <Sidebar
         visible={sidebarVisible}
         onClose={() => setSidebarVisible(false)}
+        navigation={navigation}
       />
 
       <Animated.View style={[styles.mainContent, { opacity: fadeAnim }]}>

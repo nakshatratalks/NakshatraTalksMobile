@@ -31,7 +31,17 @@
       "Bash(npx expo start:*)",
       "Bash(find:*)",
       "Bash(npx expo export --platform web --output-dir /dev/null)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(xargs ls:*)",
+      "Bash(npm run build:*)",
+      "WebSearch",
+      "Bash(npx react-native config)",
+      "Bash(npx expo-autolinking:*)",
+      "Bash(npx expo-modules-autolinking:*)",
+      "Bash(npx @react-native-community/cli config)",
+      "WebFetch(domain:razorpay.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

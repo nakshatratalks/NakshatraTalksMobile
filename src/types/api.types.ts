@@ -202,6 +202,68 @@ export interface RechargeData {
   paymentId: string;
 }
 
+// Wallet Summary Response
+export interface WalletSummary {
+  balance: number;
+  currency: string;
+  pendingOrders: number;
+  stats: {
+    last30Days: {
+      totalSpent: number;
+      totalRecharged: number;
+      transactionCount: number;
+    };
+  };
+  recentTransactions: Transaction[];
+}
+
+// Recharge Option
+export interface RechargeOption {
+  amount: number;
+  label?: string;
+  bonus?: number;
+  isPopular?: boolean;
+}
+
+// Initiate Recharge Response
+export interface InitiateRechargeResponse {
+  orderId: string;
+  keyId: string;
+  amount: number;
+  amountInPaise: number;
+  currency: string;
+  prefill: {
+    name?: string;
+    email?: string;
+    contact?: string;
+  };
+}
+
+// Verify Payment Data
+export interface VerifyPaymentData {
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  razorpaySignature: string;
+}
+
+// Verify Payment Response
+export interface VerifyPaymentResponse {
+  success: boolean;
+  transactionId: string;
+  newBalance: number;
+  message?: string;
+}
+
+// Pending Order
+export interface PendingOrder {
+  id: string;
+  orderId: string;
+  amount: number;
+  status: 'pending' | 'processing';
+  createdAt: string;
+  expiresAt?: string;
+}
+
 // Chat Session Model
 export interface ChatSession {
   id: string;

@@ -22,6 +22,12 @@ export const QUERY_KEYS = {
   CATEGORIES: ['content', 'categories'] as const,
   SPECIALIZATIONS: ['content', 'specializations'] as const,
   BANNERS: ['content', 'banners'] as const,
+
+  // Wallet
+  WALLET_BALANCE: ['wallet', 'balance'] as const,
+  WALLET_SUMMARY: ['wallet', 'summary'] as const,
+  WALLET_TRANSACTIONS: ['wallet', 'transactions'] as const,
+  RECHARGE_OPTIONS: ['wallet', 'recharge-options'] as const,
 };
 
 // Type helper for query keys

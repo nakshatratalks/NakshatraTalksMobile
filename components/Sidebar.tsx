@@ -36,6 +36,7 @@ const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.75;
 interface SidebarProps {
   visible: boolean;
   onClose: () => void;
+  navigation?: any;
 }
 
 interface MenuItem {
@@ -45,7 +46,7 @@ interface MenuItem {
   onPress: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ visible, onClose, navigation }) => {
   const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -120,8 +121,8 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
       label: 'Home',
       icon: Home,
       onPress: () => {
-        console.log('Navigate to Home');
         onClose();
+        navigation?.navigate('MainTabs', { screen: 'Home' });
       },
     },
     {
@@ -129,8 +130,8 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
       label: 'Chat with Astrologer',
       icon: MessageSquare,
       onPress: () => {
-        console.log('Navigate to Chat');
         onClose();
+        navigation?.navigate('MainTabs', { screen: 'BrowseChat' });
       },
     },
     {
@@ -138,8 +139,8 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
       label: 'Call with Astrologer',
       icon: Phone,
       onPress: () => {
-        console.log('Navigate to Call');
         onClose();
+        navigation?.navigate('MainTabs', { screen: 'BrowseCall' });
       },
     },
     {
@@ -147,8 +148,8 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
       label: 'My wallet',
       icon: Wallet,
       onPress: () => {
-        console.log('Navigate to Wallet');
         onClose();
+        navigation?.navigate('Wallet');
       },
     },
     {
@@ -156,8 +157,8 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
       label: 'Service History',
       icon: Headphones,
       onPress: () => {
-        console.log('Navigate to Service History');
         onClose();
+        navigation?.navigate('ChatHistory');
       },
     },
     {
@@ -174,8 +175,8 @@ const Sidebar: React.FC<SidebarProps> = ({ visible, onClose }) => {
       label: 'My profile',
       icon: User,
       onPress: () => {
-        console.log('Navigate to Profile');
         onClose();
+        navigation?.navigate('MainTabs', { screen: 'Profile' });
       },
     },
     {

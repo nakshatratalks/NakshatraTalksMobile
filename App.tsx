@@ -45,6 +45,8 @@ import ChatHistoryScreen from './screens/ChatHistoryScreen';
 import ChatHistoryViewScreen from './screens/ChatHistoryViewScreen';
 import CallHistoryScreen from './screens/CallHistoryScreen';
 import CallScreen from './screens/CallScreen';
+import WalletScreen from './screens/WalletScreen';
+import RechargeScreen from './screens/RechargeScreen';
 
 // Create Navigators
 const Stack = createNativeStackNavigator();
@@ -207,6 +209,14 @@ const Navigation = () => {
               options={{
                 gestureEnabled: false, // Disable swipe back during call
               }}
+            />
+            <Stack.Screen
+              name="Wallet"
+              component={WalletScreen}
+            />
+            <Stack.Screen
+              name="Recharge"
+              component={RechargeScreen}
             />
           </>
         )}
