@@ -48,6 +48,15 @@ import CallScreen from './screens/CallScreen';
 import WalletScreen from './screens/WalletScreen';
 import RechargeScreen from './screens/RechargeScreen';
 
+// Feature Screens - Horoscope & Kundli
+import DailyHoroscopeScreen from './screens/DailyHoroscopeScreen';
+import KundliDashboardScreen from './screens/KundliDashboardScreen';
+import KundliGenerationScreen from './screens/KundliGenerationScreen';
+import KundliReportScreen from './screens/KundliReportScreen';
+import KundliMatchingDashboardScreen from './screens/KundliMatchingDashboardScreen';
+import KundliMatchingInputScreen from './screens/KundliMatchingInputScreen';
+import KundliMatchingReportScreen from './screens/KundliMatchingReportScreen';
+
 // Create Navigators
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -217,6 +226,35 @@ const Navigation = () => {
             <Stack.Screen
               name="Recharge"
               component={RechargeScreen}
+            />
+            {/* Feature Screens - Horoscope & Kundli */}
+            <Stack.Screen
+              name="DailyHoroscope"
+              component={DailyHoroscopeScreen}
+            />
+            <Stack.Screen
+              name="KundliDashboard"
+              component={KundliDashboardScreen}
+            />
+            <Stack.Screen
+              name="KundliGeneration"
+              component={KundliGenerationScreen}
+            />
+            <Stack.Screen
+              name="KundliReport"
+              component={KundliReportScreen}
+            />
+            <Stack.Screen
+              name="KundliMatchingDashboard"
+              component={KundliMatchingDashboardScreen}
+            />
+            <Stack.Screen
+              name="KundliMatchingInput"
+              component={KundliMatchingInputScreen}
+            />
+            <Stack.Screen
+              name="KundliMatchingReport"
+              component={KundliMatchingReportScreen}
             />
           </>
         )}

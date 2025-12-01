@@ -41,7 +41,10 @@
       "Bash(npx @react-native-community/cli config)",
       "WebFetch(domain:razorpay.com)",
       "WebFetch(domain:github.com)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "WebFetch(domain:api.prokerala.com)",
+      "WebFetch(domain:www.prokerala.com)",
+      "Bash(node scripts/convert-images.js:*)"
     ],
     "deny": [],
     "ask": []

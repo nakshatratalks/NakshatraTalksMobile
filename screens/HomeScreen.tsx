@@ -508,21 +508,25 @@ const HomeScreen = ({ navigation }: any) => {
             iconImage={require('../assets/images/icon-horoscope.png')}
             label="Daily Horoscope"
             scale={scale}
+            onPress={() => navigation.navigate('DailyHoroscope')}
           />
           <CategoryIcon
             iconImage={require('../assets/images/icon-kundli.png')}
             label="Kundli"
             scale={scale}
+            onPress={() => navigation.navigate('KundliDashboard')}
           />
           <CategoryIcon
             iconImage={require('../assets/images/icon-kundli-matching.png')}
             label="Kundli Matching"
             scale={scale}
+            onPress={() => navigation.navigate('KundliMatchingDashboard')}
           />
           <CategoryIcon
             iconImage={require('../assets/images/icon-chat-category.png')}
             label="Chat"
             scale={scale}
+            onPress={() => navigation.navigate('BrowseChat')}
           />
         </View>
 
@@ -943,7 +947,7 @@ const AnimatedButton = ({ children, onPress, style }: any) => {
 };
 
 // Category Icon Component - Enhanced Micro-interactions
-const CategoryIcon = ({ iconImage, label, scale }: any) => {
+const CategoryIcon = ({ iconImage, label, scale, onPress }: any) => {
   const scaleValue = useSharedValue(1);
   const rotateValue = useSharedValue(0);
   const rippleScale = useSharedValue(0);
@@ -1012,6 +1016,7 @@ const CategoryIcon = ({ iconImage, label, scale }: any) => {
       style={[styles.categoryButton, { width: 74 * scale }]}
       onPressIn={onPressIn}
       onPressOut={onPressOut}
+      onPress={onPress}
       activeOpacity={1}
     >
       <View style={styles.categoryIconWrapper}>
