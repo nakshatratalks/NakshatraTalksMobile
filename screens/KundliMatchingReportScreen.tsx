@@ -3,7 +3,7 @@
  * Displays Kundli Matching compatibility results with Ashtakoot analysis
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -43,7 +43,8 @@ import { BlurView } from 'expo-blur';
 import { BottomNavBar } from '../components/BottomNavBar';
 import { ShimmerEffect } from '../components/skeleton/ShimmerEffect';
 import { useResponsiveLayout } from '../src/utils/responsive';
-import { SavedMatching } from '../src/types/kundli';
+import { SavedMatching, MatchingReport } from '../src/types/kundli';
+import { matchingService } from '../src/services/matching.service';
 
 // Ashtakoot Guna data structure
 interface GunaItem {
@@ -57,8 +58,8 @@ interface GunaItem {
   verdict: 'excellent' | 'good' | 'average' | 'poor';
 }
 
-// Mock Ashtakoot data - will be replaced with API data
-const generateAshtakootData = (totalScore: number): GunaItem[] => {
+// Fallback Ashtakoot data when API is unavailable
+const generateFallbackAshtakootData = (totalScore: number): GunaItem[] => {
   // Distribute score across 8 gunas
   const gunas: GunaItem[] = [
     {
@@ -402,18 +403,76 @@ const KundliMatchingReportScreen = ({ navigation, route }: any) => {
 
   const [loading, setLoading] = useState(true);
   const [expandedGunas, setExpandedGunas] = useState<string[]>([]);
-
-  // Simulate loading
-  React.useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1500);
-    return () => clearTimeout(timer);
-  }, []);
+  const [reportData, setReportData] = useState<MatchingReport | null>(null);
 
   // Get matching data
   const matching: SavedMatching | null = matchingData || null;
-  const score = matching?.score || 0;
+  const score = reportData?.totalScore || matching?.score || 0;
   const verdict = getVerdict(score);
-  const gunas = useMemo(() => generateAshtakootData(score), [score]);
+
+  // Fetch report from API
+  const fetchReport = useCallback(async () => {
+    if (!matchingId) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const report = await matchingService.getReport(matchingId);
+      setReportData(report);
+    } catch (error) {
+      console.warn('Failed to fetch matching report from API:', error);
+      // Keep using matchingData if API fails
+    } finally {
+      setLoading(false);
+    }
+  }, [matchingId]);
+
+  // Fetch on mount
+  useEffect(() => {
+    fetchReport();
+  }, [fetchReport]);
+
+  // Map API report data to GunaItem format or use fallback
+  const gunas = useMemo((): GunaItem[] => {
+    if (reportData?.ashtakootGunas && reportData.ashtakootGunas.length > 0) {
+      // Map API response to GunaItem format
+      // API returns: { id, name, description, maxPoints, obtainedPoints, boyAttribute, girlAttribute, verdict }
+      return reportData.ashtakootGunas.map(guna => {
+        const obtainedPoints = guna.obtainedPoints || 0;
+        const maxPoints = guna.maxPoints || 1;
+        const percentage = (obtainedPoints / maxPoints) * 100;
+
+        // Map API verdict string to our type or calculate based on percentage
+        let verdict: 'excellent' | 'good' | 'average' | 'poor';
+        const apiVerdict = guna.verdict?.toLowerCase();
+        if (apiVerdict === 'excellent') verdict = 'excellent';
+        else if (apiVerdict === 'good') verdict = 'good';
+        else if (apiVerdict === 'average') verdict = 'average';
+        else if (apiVerdict === 'below_average' || apiVerdict === 'poor') verdict = 'poor';
+        else {
+          // Fallback calculation if verdict not provided
+          if (percentage >= 75) verdict = 'excellent';
+          else if (percentage >= 50) verdict = 'good';
+          else if (percentage >= 25) verdict = 'average';
+          else verdict = 'poor';
+        }
+
+        return {
+          id: guna.id || guna.name.toLowerCase().replace(/\s+/g, '_'),
+          name: guna.name,
+          maxPoints: maxPoints,
+          obtainedPoints: obtainedPoints,
+          description: guna.description || `${guna.name} represents an important aspect of compatibility.`,
+          boyAttribute: guna.boyAttribute || 'N/A',
+          girlAttribute: guna.girlAttribute || 'N/A',
+          verdict,
+        };
+      });
+    }
+    // Use fallback data
+    return generateFallbackAshtakootData(score);
+  }, [reportData, score]);
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

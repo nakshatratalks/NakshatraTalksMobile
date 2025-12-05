@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable, Animated, Dimensions } from 'react-native';
 import { Notifier, NotifierComponents, Easing } from 'react-native-notifier';
 import { CheckCircle, AlertCircle, AlertTriangle, Info, X } from 'lucide-react-native';
 
@@ -22,6 +22,8 @@ const COLORS = {
   },
 };
 
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
 export type NotificationType = 'success' | 'error' | 'warning' | 'info';
 
 interface NotificationConfig {
@@ -41,6 +43,21 @@ interface ConfirmConfig {
   onCancel?: () => void;
   confirmColor?: string;
   destructive?: boolean;
+}
+
+// ActionSheet configuration
+interface ActionSheetOption {
+  text: string;
+  onPress: () => void;
+  destructive?: boolean;
+}
+
+interface ActionSheetConfig {
+  title?: string;
+  message?: string;
+  options: ActionSheetOption[];
+  cancelText?: string;
+  onCancel?: () => void;
 }
 
 // Custom notification component
@@ -116,6 +133,36 @@ class ConfirmationManager {
   }
 
   show(config: ConfirmConfig) {
+    this.listeners.forEach(listener => listener(config));
+  }
+
+  hide() {
+    this.listeners.forEach(listener => listener(null));
+  }
+}
+
+// Singleton to manage action sheet state
+class ActionSheetManager {
+  private static instance: ActionSheetManager;
+  private listeners: Array<(config: ActionSheetConfig | null) => void> = [];
+
+  private constructor() {}
+
+  static getInstance(): ActionSheetManager {
+    if (!ActionSheetManager.instance) {
+      ActionSheetManager.instance = new ActionSheetManager();
+    }
+    return ActionSheetManager.instance;
+  }
+
+  subscribe(listener: (config: ActionSheetConfig | null) => void) {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== listener);
+    };
+  }
+
+  show(config: ActionSheetConfig) {
     this.listeners.forEach(listener => listener(config));
   }
 
@@ -201,6 +248,161 @@ export const ConfirmationModalProvider: React.FC<{ children: React.ReactNode }> 
   );
 };
 
+// Action Sheet Provider Component
+export const ActionSheetProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [config, setConfig] = useState<ActionSheetConfig | null>(null);
+  const [slideAnim] = useState(new Animated.Value(SCREEN_HEIGHT));
+  const [fadeAnim] = useState(new Animated.Value(0));
+
+  useEffect(() => {
+    const manager = ActionSheetManager.getInstance();
+    const unsubscribe = manager.subscribe(setConfig);
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (config) {
+      // Animate in
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 65,
+          friction: 11,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      // Reset animations
+      slideAnim.setValue(SCREEN_HEIGHT);
+      fadeAnim.setValue(0);
+    }
+  }, [config]);
+
+  const handleClose = () => {
+    // Animate out
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: SCREEN_HEIGHT,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      const onCancel = config?.onCancel;
+      setConfig(null);
+      onCancel?.();
+    });
+  };
+
+  const handleOptionPress = (option: ActionSheetOption) => {
+    // Animate out then call handler
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: SCREEN_HEIGHT,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setConfig(null);
+      setTimeout(() => option.onPress(), 50);
+    });
+  };
+
+  return (
+    <>
+      {children}
+      <Modal
+        visible={!!config}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={handleClose}
+      >
+        <View style={styles.actionSheetOverlay}>
+          {/* Background overlay */}
+          <Animated.View
+            style={[
+              styles.actionSheetBackdrop,
+              { opacity: fadeAnim }
+            ]}
+          >
+            <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+          </Animated.View>
+
+          {/* Bottom sheet */}
+          <Animated.View
+            style={[
+              styles.actionSheetContainer,
+              { transform: [{ translateY: slideAnim }] }
+            ]}
+          >
+            {/* Header */}
+            {(config?.title || config?.message) && (
+              <View style={styles.actionSheetHeader}>
+                {config?.title && (
+                  <Text style={styles.actionSheetTitle}>{config.title}</Text>
+                )}
+                {config?.message && (
+                  <Text style={styles.actionSheetMessage}>{config.message}</Text>
+                )}
+              </View>
+            )}
+
+            {/* Options */}
+            <View style={styles.actionSheetOptions}>
+              {config?.options.map((option, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.actionSheetOption,
+                    index > 0 && styles.actionSheetOptionBorder,
+                  ]}
+                  onPress={() => handleOptionPress(option)}
+                  activeOpacity={0.6}
+                >
+                  <Text
+                    style={[
+                      styles.actionSheetOptionText,
+                      option.destructive && styles.actionSheetOptionTextDestructive,
+                    ]}
+                  >
+                    {option.text}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Cancel button */}
+            <TouchableOpacity
+              style={styles.actionSheetCancel}
+              onPress={handleClose}
+              activeOpacity={0.6}
+            >
+              <Text style={styles.actionSheetCancelText}>
+                {config?.cancelText || 'Cancel'}
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
+    </>
+  );
+};
+
 class NotificationService {
   /**
    * Show a simple notification toast
@@ -257,11 +459,19 @@ class NotificationService {
   }
 
   /**
+   * Show an action sheet (bottom sheet with options)
+   */
+  static actionSheet(config: ActionSheetConfig) {
+    ActionSheetManager.getInstance().show(config);
+  }
+
+  /**
    * Hide all notifications
    */
   static hideAll() {
     Notifier.hideNotification();
     ConfirmationManager.getInstance().hide();
+    ActionSheetManager.getInstance().hide();
   }
 
   /**
@@ -380,6 +590,79 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Lexend-SemiBold',
     color: COLORS.background.white,
+  },
+
+  // Action Sheet styles
+  actionSheetOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  actionSheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  actionSheetContainer: {
+    backgroundColor: 'transparent',
+    paddingHorizontal: 8,
+    paddingBottom: 34,
+  },
+  actionSheetHeader: {
+    backgroundColor: COLORS.background.white,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
+  },
+  actionSheetTitle: {
+    fontSize: 14,
+    fontFamily: 'Lexend_600SemiBold',
+    color: COLORS.text.medium,
+    textAlign: 'center',
+  },
+  actionSheetMessage: {
+    fontSize: 13,
+    fontFamily: 'Lexend_400Regular',
+    color: COLORS.text.light,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  actionSheetOptions: {
+    backgroundColor: COLORS.background.white,
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
+    overflow: 'hidden',
+  },
+  actionSheetOption: {
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionSheetOptionBorder: {
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5E5',
+  },
+  actionSheetOptionText: {
+    fontSize: 18,
+    fontFamily: 'Lexend_500Medium',
+    color: COLORS.primary,
+  },
+  actionSheetOptionTextDestructive: {
+    color: COLORS.error,
+  },
+  actionSheetCancel: {
+    backgroundColor: COLORS.background.white,
+    borderRadius: 14,
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  actionSheetCancelText: {
+    fontSize: 18,
+    fontFamily: 'Lexend_600SemiBold',
+    color: COLORS.text.dark,
   },
 });
 

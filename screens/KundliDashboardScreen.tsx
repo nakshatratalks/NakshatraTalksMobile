@@ -1,9 +1,14 @@
 /**
  * KundliDashboardScreen
  * Displays list of saved Kundli reports with search and create new option
+ *
+ * Features:
+ * - Long-press on card for Share/Delete options
+ * - Share generates styled image card
+ * - Delete with confirmation
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,6 +19,8 @@ import {
   Platform,
   RefreshControl,
   StatusBar as RNStatusBar,
+  ActionSheetIOS,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -24,14 +31,19 @@ import Animated, {
   Layout,
 } from 'react-native-reanimated';
 import { useFocusEffect } from '@react-navigation/native';
-import { ChevronLeft, Search, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, Search, ChevronRight, Star } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { captureRef } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { BottomNavBar } from '../components/BottomNavBar';
 import { ShimmerEffect } from '../components/skeleton/ShimmerEffect';
 import { useResponsiveLayout } from '../src/utils/responsive';
 import { useSavedKundlis } from '../src/hooks/useKundliStorage';
-import { SavedKundli } from '../src/types/kundli';
+import { SavedKundli, KundliReport } from '../src/types/kundli';
+import { kundliService } from '../src/services/kundli.service';
+import NotificationService from '../src/utils/notificationService';
 
 // Format date for display
 const formatDate = (dateString: string, timeString: string): string => {
@@ -40,6 +52,23 @@ const formatDate = (dateString: string, timeString: string): string => {
   const month = date.toLocaleString('en-US', { month: 'long' });
   const year = date.getFullYear();
   return `${day} ${month} ${year}, ${timeString}`;
+};
+
+// Format date for share card (shorter)
+const formatDateShort = (dateString: string): string => {
+  const date = new Date(dateString);
+  const day = date.getDate();
+  const month = date.toLocaleString('en-US', { month: 'short' });
+  const year = date.getFullYear();
+  return `${day} ${month} ${year}`;
+};
+
+// Format time for share card (12-hour format)
+const formatTime12Hour = (timeString: string): string => {
+  const [hours, minutes] = timeString.split(':').map(Number);
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hour12 = hours % 12 || 12;
+  return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
 };
 
 // Get initials from name
@@ -57,11 +86,13 @@ const KundliCard = React.memo(({
   index,
   scale,
   onPress,
+  onLongPress,
 }: {
   kundli: SavedKundli;
   index: number;
   scale: number;
   onPress: () => void;
+  onLongPress: () => void;
 }) => {
   return (
     <Animated.View
@@ -75,6 +106,8 @@ const KundliCard = React.memo(({
           marginBottom: 12 * scale,
         }]}
         onPress={onPress}
+        onLongPress={onLongPress}
+        delayLongPress={500}
         activeOpacity={0.7}
       >
         <View style={styles.cardContent}>
@@ -107,6 +140,108 @@ const KundliCard = React.memo(({
         </View>
       </TouchableOpacity>
     </Animated.View>
+  );
+});
+
+// Shareable Kundli Card Component (for image capture)
+const ShareableKundliCard = React.forwardRef<View, {
+  kundli: SavedKundli;
+  reportData: KundliReport | null;
+}>(({ kundli, reportData }, ref) => {
+  const basicInfo = reportData?.basicInfo;
+
+  return (
+    <View
+      ref={ref}
+      style={shareStyles.container}
+      collapsable={false}
+    >
+      <LinearGradient
+        colors={['#1a1a2e', '#16213e', '#0f3460']}
+        style={shareStyles.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        {/* Header */}
+        <View style={shareStyles.header}>
+          <Star size={20} color="#FFCF0D" fill="#FFCF0D" />
+          <Text style={shareStyles.headerText}>NakshatraTalks</Text>
+        </View>
+
+        {/* Divider */}
+        <View style={shareStyles.divider} />
+
+        {/* Avatar */}
+        <View style={shareStyles.avatarContainer}>
+          <View style={shareStyles.avatar}>
+            <Text style={shareStyles.avatarText}>{getInitials(kundli.name)}</Text>
+          </View>
+        </View>
+
+        {/* Name */}
+        <Text style={shareStyles.name}>{kundli.name.toUpperCase()}</Text>
+
+        {/* Birth Details Card */}
+        <View style={shareStyles.infoCard}>
+          <View style={shareStyles.infoRow}>
+            <Text style={shareStyles.infoLabel}>Date of Birth</Text>
+            <Text style={shareStyles.infoValue}>{formatDateShort(kundli.dateOfBirth)}</Text>
+          </View>
+          <View style={shareStyles.infoRow}>
+            <Text style={shareStyles.infoLabel}>Time of Birth</Text>
+            <Text style={shareStyles.infoValue}>{formatTime12Hour(kundli.timeOfBirth)}</Text>
+          </View>
+          <View style={shareStyles.infoRow}>
+            <Text style={shareStyles.infoLabel}>Birth Place</Text>
+            <Text style={shareStyles.infoValue} numberOfLines={1}>
+              {kundli.birthPlace.name.split(',')[0]}
+            </Text>
+          </View>
+        </View>
+
+        {/* Astrological Details Card */}
+        {basicInfo && (
+          <View style={shareStyles.infoCard}>
+            <View style={shareStyles.infoRow}>
+              <Text style={shareStyles.infoLabel}>Nakshatra</Text>
+              <Text style={shareStyles.infoValue}>
+                {basicInfo.nakshatra?.name || 'N/A'}
+                {basicInfo.nakshatra?.pada ? ` (Pada ${basicInfo.nakshatra.pada})` : ''}
+              </Text>
+            </View>
+            <View style={shareStyles.infoRow}>
+              <Text style={shareStyles.infoLabel}>Rashi</Text>
+              <Text style={shareStyles.infoValue}>
+                {basicInfo.rasi?.name || 'N/A'}
+              </Text>
+            </View>
+            <View style={shareStyles.infoRow}>
+              <Text style={shareStyles.infoLabel}>Lagna</Text>
+              <Text style={shareStyles.infoValue}>
+                {basicInfo.lagna?.name || 'N/A'}
+              </Text>
+            </View>
+            {basicInfo.sunSign && (
+              <View style={shareStyles.infoRow}>
+                <Text style={shareStyles.infoLabel}>Sun Sign</Text>
+                <Text style={shareStyles.infoValue}>{basicInfo.sunSign}</Text>
+              </View>
+            )}
+            {basicInfo.moonSign && (
+              <View style={shareStyles.infoRow}>
+                <Text style={shareStyles.infoLabel}>Moon Sign</Text>
+                <Text style={shareStyles.infoValue}>{basicInfo.moonSign}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Footer */}
+        <View style={shareStyles.footer}>
+          <Text style={shareStyles.footerText}>Generated via NakshatraTalks</Text>
+        </View>
+      </LinearGradient>
+    </View>
   );
 });
 
@@ -165,7 +300,7 @@ const EmptyState = ({ scale, onCreatePress }: { scale: number; onCreatePress: ()
 
 const KundliDashboardScreen = ({ navigation }: any) => {
   const { scale } = useResponsiveLayout();
-  const { kundlis, loading, searchKundlis, refetch } = useSavedKundlis();
+  const { kundlis: localKundlis, loading: localLoading, searchKundlis, refetch: refetchLocal } = useSavedKundlis();
   const insets = useSafeAreaInsets();
 
   // Status bar height for proper spacing
@@ -176,19 +311,78 @@ const KundliDashboardScreen = ({ navigation }: any) => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [apiKundlis, setApiKundlis] = useState<SavedKundli[]>([]);
+  const [apiLoading, setApiLoading] = useState(true);
+
+  // State for share/delete functionality
+  const [selectedKundli, setSelectedKundli] = useState<SavedKundli | null>(null);
+  const [shareReportData, setShareReportData] = useState<KundliReport | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoadingReport, setIsLoadingReport] = useState(false);
+
+  // Ref for shareable card
+  const shareCardRef = useRef<View>(null);
+
+  // Combined loading state
+  const loading = localLoading || apiLoading;
+
+  // Fetch kundlis from API
+  const fetchFromApi = useCallback(async () => {
+    try {
+      const { data } = await kundliService.list({ limit: 50 });
+      setApiKundlis(data);
+    } catch (error) {
+      console.warn('Failed to fetch kundlis from API:', error);
+      // Keep using local data if API fails
+    } finally {
+      setApiLoading(false);
+    }
+  }, []);
+
+  // Fetch on mount
+  useEffect(() => {
+    fetchFromApi();
+  }, [fetchFromApi]);
+
+  // Merge API and local kundlis, removing duplicates by id
+  const allKundlis = useMemo(() => {
+    const kundliMap = new Map<string, SavedKundli>();
+
+    // Add local kundlis first
+    localKundlis.forEach(k => kundliMap.set(k.id, k));
+
+    // API kundlis take priority (update existing or add new)
+    apiKundlis.forEach(k => kundliMap.set(k.id, k));
+
+    // Convert to array and sort by creation date (newest first)
+    return Array.from(kundliMap.values()).sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [localKundlis, apiKundlis]);
 
   // Filtered kundlis based on search
   const filteredKundlis = useMemo(() => {
-    return searchKundlis(searchQuery);
-  }, [searchKundlis, searchQuery]);
+    if (!searchQuery.trim()) return allKundlis;
+    const query = searchQuery.toLowerCase();
+    return allKundlis.filter(k =>
+      k.name.toLowerCase().includes(query) ||
+      k.birthPlace.name.toLowerCase().includes(query)
+    );
+  }, [allKundlis, searchQuery]);
 
   // Handle refresh
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await refetch();
+    // Refresh both API and local data
+    await Promise.all([
+      fetchFromApi(),
+      refetchLocal(),
+    ]);
     setRefreshing(false);
-  }, [refetch]);
+  }, [fetchFromApi, refetchLocal]);
 
   // Handle back navigation
   const handleBack = useCallback(() => {
@@ -208,6 +402,150 @@ const KundliDashboardScreen = ({ navigation }: any) => {
     navigation.navigate('KundliReport', { kundliId: kundli.id, kundliData: kundli });
   }, [navigation]);
 
+  // Show action sheet for long press
+  const showActionSheet = useCallback((kundli: SavedKundli) => {
+    if (isProcessing || refreshing) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectedKundli(kundli);
+
+    if (Platform.OS === 'ios') {
+      const options = ['Share', 'Delete', 'Cancel'];
+      const destructiveButtonIndex = 1;
+      const cancelButtonIndex = 2;
+
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          destructiveButtonIndex,
+          cancelButtonIndex,
+          title: kundli.name,
+          message: 'Choose an action',
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 0) {
+            handleShare(kundli);
+          } else if (buttonIndex === 1) {
+            handleDeleteConfirmation(kundli);
+          }
+        }
+      );
+    } else {
+      // Android: Use custom action sheet
+      NotificationService.actionSheet({
+        title: kundli.name,
+        message: 'Choose an action',
+        options: [
+          { text: 'Share', onPress: () => handleShare(kundli) },
+          { text: 'Delete', onPress: () => handleDeleteConfirmation(kundli), destructive: true },
+        ],
+        cancelText: 'Cancel',
+      });
+    }
+  }, [isProcessing, refreshing]);
+
+  // Handle delete confirmation
+  const handleDeleteConfirmation = useCallback((kundli: SavedKundli) => {
+    NotificationService.confirm({
+      title: 'Delete Kundli',
+      message: `Are you sure you want to delete "${kundli.name}"'s Kundli? This action cannot be undone.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      destructive: true,
+      onConfirm: () => handleDelete(kundli.id),
+    });
+  }, []);
+
+  // Handle delete
+  const handleDelete = useCallback(async (kundliId: string) => {
+    setIsProcessing(true);
+
+    try {
+      await kundliService.delete(kundliId);
+
+      // Remove from local state
+      setApiKundlis(prev => prev.filter(k => k.id !== kundliId));
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      NotificationService.success('Kundli deleted successfully');
+
+      // Also refresh local storage
+      refetchLocal();
+    } catch (error: any) {
+      console.error('Failed to delete kundli:', error);
+
+      if (error.message?.includes('not found') || error.message?.includes('404')) {
+        NotificationService.warning('This Kundli was already deleted.', 'Not Found');
+        // Refresh the list
+        handleRefresh();
+      } else {
+        NotificationService.error('Unable to delete. Please check your connection and try again.', 'Error');
+      }
+    } finally {
+      setIsProcessing(false);
+      setSelectedKundli(null);
+    }
+  }, [refetchLocal, handleRefresh]);
+
+  // Handle share
+  const handleShare = useCallback(async (kundli: SavedKundli) => {
+    setIsProcessing(true);
+    setIsLoadingReport(true);
+    setSelectedKundli(kundli);
+
+    try {
+      // Try to fetch report data for astrological details (graceful fallback if fails)
+      let reportData: KundliReport | null = null;
+      try {
+        reportData = await kundliService.getReport(kundli.id);
+      } catch (reportError) {
+        console.warn('Could not fetch report data, sharing with basic info only:', reportError);
+        // Continue without report data - card will show basic info only
+      }
+
+      setShareReportData(reportData);
+      setIsLoadingReport(false);
+
+      // Wait for the shareable card to render
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Capture the card as an image
+      if (shareCardRef.current) {
+        const uri = await captureRef(shareCardRef, {
+          format: 'png',
+          quality: 1,
+          result: 'tmpfile',
+        });
+
+        // Check if sharing is available
+        const isAvailable = await Sharing.isAvailableAsync();
+
+        if (isAvailable) {
+          await Sharing.shareAsync(uri, {
+            mimeType: 'image/png',
+            dialogTitle: `Share ${kundli.name}'s Kundli`,
+          });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else {
+          NotificationService.warning('Sharing is not available on this device.', 'Sharing Unavailable');
+        }
+      }
+    } catch (error: any) {
+      console.error('Failed to share kundli:', error);
+      NotificationService.error('Unable to generate image. Please try again.', 'Share Failed');
+    } finally {
+      setIsProcessing(false);
+      setIsLoadingReport(false);
+      setSelectedKundli(null);
+      setShareReportData(null);
+    }
+  }, []);
+
+  // Handle long press on card
+  const handleLongPress = useCallback((kundli: SavedKundli) => {
+    showActionSheet(kundli);
+  }, [showActionSheet]);
+
   // Render kundli card
   const renderKundliCard = useCallback(({ item, index }: { item: SavedKundli; index: number }) => (
     <KundliCard
@@ -215,8 +553,9 @@ const KundliDashboardScreen = ({ navigation }: any) => {
       index={index}
       scale={scale}
       onPress={() => handleCardPress(item)}
+      onLongPress={() => handleLongPress(item)}
     />
-  ), [scale, handleCardPress]);
+  ), [scale, handleCardPress, handleLongPress]);
 
   // Key extractor
   const keyExtractor = useCallback((item: SavedKundli) => item.id, []);
@@ -325,7 +664,7 @@ const KundliDashboardScreen = ({ navigation }: any) => {
         </View>
 
         {/* Create New Button */}
-        {!loading && (kundlis.length > 0 || searchQuery) && (
+        {!loading && (allKundlis.length > 0 || searchQuery) && (
           <Animated.View
             entering={FadeInDown.delay(400).duration(400)}
             style={[styles.createButtonContainer, { paddingHorizontal: 20 * scale }]}
@@ -348,6 +687,29 @@ const KundliDashboardScreen = ({ navigation }: any) => {
         {/* Bottom Navigation */}
         <BottomNavBar navigation={navigation} />
       </View>
+
+      {/* Hidden Shareable Card (for image capture) */}
+      {selectedKundli && (
+        <View style={shareStyles.hiddenContainer}>
+          <ShareableKundliCard
+            ref={shareCardRef}
+            kundli={selectedKundli}
+            reportData={shareReportData}
+          />
+        </View>
+      )}
+
+      {/* Loading Overlay */}
+      {isProcessing && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color="#2930A6" />
+            <Text style={styles.loadingText}>
+              {isLoadingReport ? 'Fetching data...' : 'Processing...'}
+            </Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -521,6 +883,119 @@ const styles = StyleSheet.create({
     fontFamily: 'Lexend_600SemiBold',
     fontSize: 16,
     color: '#FFFFFF',
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  loadingBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    minWidth: 150,
+  },
+  loadingText: {
+    fontFamily: 'Lexend_500Medium',
+    fontSize: 14,
+    color: '#333333',
+    marginTop: 12,
+  },
+});
+
+// Styles for shareable card
+const shareStyles = StyleSheet.create({
+  hiddenContainer: {
+    position: 'absolute',
+    top: -1000,
+    left: -1000,
+  },
+  container: {
+    width: 400,
+    height: 520,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  gradient: {
+    flex: 1,
+    padding: 24,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerText: {
+    fontFamily: 'Lexend_600SemiBold',
+    fontSize: 18,
+    color: '#FFFFFF',
+    marginLeft: 8,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    marginVertical: 16,
+  },
+  avatarContainer: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  avatar: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#FFCF0D',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontFamily: 'Lexend_700Bold',
+    fontSize: 24,
+    color: '#1a1a2e',
+  },
+  name: {
+    fontFamily: 'Lexend_700Bold',
+    fontSize: 20,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 16,
+    letterSpacing: 1,
+  },
+  infoCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  infoLabel: {
+    fontFamily: 'Lexend_400Regular',
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  infoValue: {
+    fontFamily: 'Lexend_500Medium',
+    fontSize: 13,
+    color: '#FFFFFF',
+    maxWidth: '55%',
+    textAlign: 'right',
+  },
+  footer: {
+    marginTop: 'auto',
+    alignItems: 'center',
+  },
+  footerText: {
+    fontFamily: 'Lexend_400Regular',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.5)',
   },
 });
 

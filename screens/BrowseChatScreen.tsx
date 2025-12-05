@@ -7,13 +7,27 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
-  ScrollView,
   Dimensions,
-  Animated,
-  Easing,
   ActivityIndicator,
   RefreshControl,
+  Platform,
+  FlatList,
+  ImageSourcePropType,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  withDelay,
+  interpolate,
+  interpolateColor,
+  Extrapolation,
+  useAnimatedScrollHandler,
+  runOnJS,
+  FadeInDown,
+  ZoomIn,
+} from 'react-native-reanimated';
 import NotificationService from '../src/utils/notificationService';
 import { StatusBar, setStatusBarStyle } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -35,13 +49,6 @@ import {
   User,
   Bell,
   IndianRupee,
-  Home,
-  MessageSquare,
-  Phone,
-  UserCircle2,
-  Star,
-  Video,
-  Grid,
   Sparkles,
   Heart,
   Moon,
@@ -53,6 +60,7 @@ import {
   Crown,
   BadgeCheck,
   History,
+  Grid,
 } from 'lucide-react-native';
 import { useResponsiveLayout } from '../src/utils/responsive';
 import { useBrowseChatData } from '../src/hooks/useBrowseChatData';
@@ -79,6 +87,15 @@ const getSpecializationIcon = (name: string) => {
   if (lowerName.includes('marriage') || lowerName.includes('relationship')) return Heart;
   if (lowerName.includes('career')) return Crown;
   return Sparkles; // default
+};
+
+// Helper to handle image sources safely
+const getImageSource = (image: string | number | null | undefined): ImageSourcePropType | undefined => {
+  if (!image) return undefined;
+  if (typeof image === 'string') {
+    return { uri: image };
+  }
+  return image as ImageSourcePropType;
 };
 
 const BrowseChatScreen = ({ navigation }: any) => {
@@ -111,17 +128,12 @@ const BrowseChatScreen = ({ navigation }: any) => {
     pricePerMinute: 0,
   });
 
-  // Animation values - Initialize to final values (no entrance animation - screens stay mounted)
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-  const slideAnim = useRef(new Animated.Value(0)).current;
-  const screenScale = useRef(new Animated.Value(1)).current;
-  const screenTranslateX = useRef(new Animated.Value(0)).current;
-  const contentOpacityAnim = useRef(new Animated.Value(1)).current;
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const searchBorderAnim = useRef(new Animated.Value(0)).current;
-
-  // Stagger animation values for cards - Initialize to 1 (no entrance animation)
-  const cardsAnim = useRef(astrologers.map(() => new Animated.Value(1))).current;
+  // Reanimated Shared Values
+  const scrollY = useSharedValue(0);
+  const searchBorderAnim = useSharedValue(0);
+  const screenScale = useSharedValue(1);
+  const screenTranslateX = useSharedValue(0);
+  const contentOpacityAnim = useSharedValue(1);
 
   const [fontsLoaded] = useFonts({
     Lexend_400Regular,
@@ -136,7 +148,6 @@ const BrowseChatScreen = ({ navigation }: any) => {
   const { cardWidth, scale } = useResponsiveLayout();
 
   // Set status bar based on sidebar state when screen is focused
-  // Only set dark if sidebar is NOT open, to avoid overriding sidebar's light status bar
   useFocusEffect(
     useCallback(() => {
       if (!sidebarVisible) {
@@ -145,76 +156,37 @@ const BrowseChatScreen = ({ navigation }: any) => {
     }, [sidebarVisible])
   );
 
-  // No mount animation needed - screens stay mounted via Tab Navigator
-  // All animation values are already initialized to their final state
-
   // Search focus animation
   const handleSearchFocus = () => {
     setSearchFocused(true);
-    Animated.timing(searchBorderAnim, {
-      toValue: 1,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
+    searchBorderAnim.value = withTiming(1, { duration: 200 });
   };
 
   const handleSearchBlur = () => {
     setSearchFocused(false);
-    Animated.timing(searchBorderAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
+    searchBorderAnim.value = withTiming(0, { duration: 200 });
   };
 
-  // 3D Sidebar animation effect with content fade
-  // Note: Status bar is managed by the Sidebar component itself
+  // 3D Sidebar animation effect
   useEffect(() => {
     const SIDEBAR_WIDTH = screenWidth * 0.75;
     if (sidebarVisible) {
-      Animated.parallel([
-        Animated.timing(screenScale, {
-          toValue: 0.85,
-          duration: 350,
-          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-          useNativeDriver: true,
-        }),
-        Animated.timing(screenTranslateX, {
-          toValue: SIDEBAR_WIDTH * 0.8,
-          duration: 350,
-          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-          useNativeDriver: true,
-        }),
-        Animated.timing(contentOpacityAnim, {
-          toValue: 0.3,
-          duration: 350,
-          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-          useNativeDriver: true,
-        }),
-      ]).start();
+      screenScale.value = withTiming(0.85, { duration: 350 });
+      screenTranslateX.value = withTiming(SIDEBAR_WIDTH * 0.8, { duration: 350 });
+      contentOpacityAnim.value = withTiming(0.3, { duration: 350 });
     } else {
-      Animated.parallel([
-        Animated.timing(screenScale, {
-          toValue: 1,
-          duration: 300,
-          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-          useNativeDriver: true,
-        }),
-        Animated.timing(screenTranslateX, {
-          toValue: 0,
-          duration: 300,
-          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-          useNativeDriver: true,
-        }),
-        Animated.timing(contentOpacityAnim, {
-          toValue: 1,
-          duration: 300,
-          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-          useNativeDriver: true,
-        }),
-      ]).start();
+      screenScale.value = withTiming(1, { duration: 300 });
+      screenTranslateX.value = withTiming(0, { duration: 300 });
+      contentOpacityAnim.value = withTiming(1, { duration: 300 });
     }
   }, [sidebarVisible]);
+
+  // Scroll Handler
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
 
   // Handle pull-to-refresh
   const handleRefresh = async () => {
@@ -284,181 +256,189 @@ const BrowseChatScreen = ({ navigation }: any) => {
     }
   };
 
+  // Animated Styles
+  const mainContainerStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { scale: screenScale.value },
+        { translateX: screenTranslateX.value },
+      ],
+      opacity: contentOpacityAnim.value,
+      borderRadius: sidebarVisible ? 30 : 0,
+      overflow: 'hidden',
+    };
+  });
+
+  // Header Animation
+  const headerStyle = useAnimatedStyle(() => {
+    const translateY = interpolate(scrollY.value, [0, 100], [0, -50], Extrapolation.CLAMP);
+    const opacity = interpolate(scrollY.value, [0, 50], [1, 0], Extrapolation.CLAMP);
+    return {
+      transform: [{ translateY }],
+      opacity,
+    };
+  });
+
+  const stickyHeaderStyle = useAnimatedStyle(() => {
+    const height = interpolate(scrollY.value, [0, 100], [200 * scale, 120 * scale], Extrapolation.CLAMP);
+    return { height };
+  });
+
+  const searchContainerStyle = useAnimatedStyle(() => {
+    const translateY = interpolate(scrollY.value, [0, 100], [0, -40], Extrapolation.CLAMP);
+    const width = interpolate(scrollY.value, [0, 100], [screenWidth - 40 * scale, screenWidth - 100 * scale], Extrapolation.CLAMP);
+
+    return {
+      transform: [{ translateY }],
+      width,
+      borderWidth: interpolate(searchBorderAnim.value, [0, 1], [1, 2]),
+      borderColor: interpolateColor(
+        searchBorderAnim.value,
+        [0, 1],
+        ['#595959', '#2930A6']
+      ),
+    };
+  });
+
   if (!fontsLoaded) {
     return null;
   }
 
+  const renderItem = ({ item, index }: { item: Astrologer; index: number }) => (
+    <Animated.View entering={FadeInDown.delay(index * 100).springify()}>
+      <AstrologerCard
+        astrologer={item}
+        index={index}
+        scale={scale}
+        onStartChat={handleStartChat}
+        loadingAstrologerId={loadingAstrologerId}
+        navigation={navigation}
+      />
+    </Animated.View>
+  );
+
   return (
     <>
-      <Animated.View style={[
-        styles.mainContainer,
-        {
-          transform: [
-            { scale: screenScale },
-            { translateX: screenTranslateX },
-          ],
-          opacity: contentOpacityAnim,
-          borderRadius: sidebarVisible ? 30 : 0,
-          overflow: 'hidden',
-        }
-      ]}>
+      <Animated.View style={[styles.mainContainer, mainContainerStyle]}>
         <StatusBar style={sidebarVisible ? "light" : "dark"} translucent backgroundColor="transparent" />
         <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-          {/* Sticky Header and Filter Section */}
-          <Animated.View style={[styles.stickyHeader, {
-            opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }],
-          }]}>
-            {/* Yellow Background Header - Ends right after search bar */}
-            <View style={[styles.yellowHeader, { paddingTop: 50 * scale, paddingBottom: 12 * scale }]}>
-              {/* Header Section */}
-              <View style={[styles.header, {
-                paddingHorizontal: 20 * scale,
-                paddingTop: 20 * scale,
-                marginBottom: 24 * scale,
-              }]}>
-                <TouchableOpacity
-                  style={styles.headerLeft}
-                  onPress={() => setSidebarVisible(true)}
-                  activeOpacity={0.7}
+
+          {/* Header Background */}
+          <Animated.View style={[styles.yellowHeader, stickyHeaderStyle]}>
+            <Animated.View style={[styles.headerContent, headerStyle]}>
+              <TouchableOpacity
+                style={styles.headerLeft}
+                onPress={() => setSidebarVisible(true)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.profileCircle, { width: 56 * scale, height: 56 * scale }]}>
+                  {userProfile?.profileImage ? (
+                    <Image
+                      source={{ uri: userProfile.profileImage }}
+                      style={styles.profileImage}
+                    />
+                  ) : (
+                    <User size={28 * scale} color="#2930A6" />
+                  )}
+                </View>
+                <View style={styles.greetingContainer}>
+                  <Text style={[styles.heyText, { fontSize: 16 * scale }]}>Hey</Text>
+                  <Text style={[styles.nameText, { fontSize: 16 * scale }]}>
+                    {userProfile?.name || user?.name || 'Guest'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <View style={styles.headerRight}>
+                <AnimatedButton
+                  style={[styles.walletButton, {
+                    height: 32 * scale,
+                    borderRadius: 20 * scale,
+                    paddingHorizontal: 14 * scale
+                  }]}
+                  onPress={() => navigation.navigate('Wallet')}
                 >
-                  <View style={[styles.profileCircle, { width: 56 * scale, height: 56 * scale }]}>
-                    {userProfile?.profileImage ? (
-                      <Image
-                        source={{ uri: userProfile.profileImage }}
-                        style={styles.profileImage}
-                      />
-                    ) : (
-                      <User size={28 * scale} color="#2930A6" />
-                    )}
-                  </View>
-                  <View style={styles.greetingContainer}>
-                    <Text style={[styles.heyText, { fontSize: 16 * scale }]}>Hey</Text>
-                    <Text style={[styles.nameText, { fontSize: 16 * scale }]}>
-                      {userProfile?.name || user?.name || 'Guest'}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
+                  <IndianRupee size={18 * scale} color="#FFFFFF" />
+                  <Text style={[styles.walletText, { fontSize: 16 * scale }]}>
+                    {userProfile?.walletBalance?.toFixed(2) || '0.00'}
+                  </Text>
+                </AnimatedButton>
 
-                <View style={styles.headerRight}>
-                  <AnimatedButton
-                    style={[styles.walletButton, {
-                      height: 32 * scale,
-                      borderRadius: 20 * scale,
-                      paddingHorizontal: 14 * scale
-                    }]}
-                    onPress={() => navigation.navigate('Wallet')}
-                  >
-                    <IndianRupee size={18 * scale} color="#FFFFFF" />
-                    <Text style={[styles.walletText, { fontSize: 16 * scale }]}>
-                      {userProfile?.walletBalance?.toFixed(2) || '0.00'}
-                    </Text>
-                  </AnimatedButton>
-
-                  <AnimatedButton
-                    style={[styles.bellButton, { width: 32 * scale, height: 32 * scale }]}
-                    onPress={() => navigation.navigate('ChatHistory')}
-                  >
-                    <History size={24 * scale} color="#2930A6" strokeWidth={2} />
-                  </AnimatedButton>
-                </View>
+                <AnimatedButton
+                  style={[styles.bellButton, { width: 32 * scale, height: 32 * scale }]}
+                  onPress={() => navigation.navigate('ChatHistory')}
+                >
+                  <History size={24 * scale} color="#2930A6" strokeWidth={2} />
+                </AnimatedButton>
               </View>
+            </Animated.View>
 
-              {/* Search Bar - At the end of yellow area */}
-              <Animated.View
-                style={[
-                  styles.searchContainer,
-                  {
-                    marginHorizontal: 20 * scale,
-                    marginBottom: 12 * scale,
-                    height: 48 * scale,
-                    borderRadius: 100 * scale,
-                    paddingHorizontal: 16 * scale,
-                    borderWidth: searchBorderAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [1, 2],
-                    }),
-                    borderColor: searchBorderAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ['#595959', '#2930A6'],
-                    }),
-                  },
-                ]}
-              >
-                <View style={styles.searchLeft}>
-                  <Search size={20 * scale} color={searchFocused ? '#2930A6' : '#595959'} />
-                  <TextInput
-                    style={[styles.searchInput, { fontSize: 12 * scale }]}
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    placeholder="Search"
-                    placeholderTextColor="#595959"
-                    onFocus={handleSearchFocus}
-                    onBlur={handleSearchBlur}
-                  />
-                </View>
-                <TouchableOpacity activeOpacity={0.7}>
-                  <SlidersHorizontal size={18 * scale} color="#595959" />
-                </TouchableOpacity>
-              </Animated.View>
-            </View>
-
-            {/* Filter Chips - White Background with proper padding */}
-            <View style={[styles.filterContainer, {
-              backgroundColor: '#FFFFFF',
-              paddingHorizontal: 5 * scale,
-              paddingTop: 20 * scale,
-              paddingBottom: 20 * scale,
-            }]}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{
-                  paddingHorizontal: 5 * scale,
-                  paddingVertical: 4 * scale
-                }}
-              >
-                <FilterChip
-                  label="Filter"
-                  icon={SlidersHorizontal}
-                  isActive={false}
-                  isFilterButton={true}
-                  onPress={() => console.log('Show filter modal')}
-                  scale={scale}
+            {/* Search Bar */}
+            <Animated.View
+              style={[
+                styles.searchContainer,
+                searchContainerStyle,
+                {
+                  height: 48 * scale,
+                  borderRadius: 100 * scale,
+                  paddingHorizontal: 16 * scale,
+                  position: 'absolute',
+                  bottom: 20 * scale,
+                  left: 20 * scale,
+                },
+              ]}
+            >
+              <View style={styles.searchLeft}>
+                <Search size={20 * scale} color={searchFocused ? '#2930A6' : '#595959'} />
+                <TextInput
+                  style={[styles.searchInput, { fontSize: 12 * scale }]}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search"
+                  placeholderTextColor="#595959"
+                  onFocus={handleSearchFocus}
+                  onBlur={handleSearchBlur}
                 />
-                <View style={[styles.filterDivider, { marginHorizontal: 8 * scale }]}>
-                  <View style={styles.filterDividerLine} />
-                </View>
-                <FilterChip
-                  label="All"
-                  icon={Grid}
-                  isActive={selectedSpecialization === null}
-                  onPress={() => setSelectedSpecialization(null)}
-                  scale={scale}
-                />
-                {specializations.slice(0, 5).map((spec) => (
-                  <FilterChip
-                    key={spec.id}
-                    label={spec.name}
-                    icon={getSpecializationIcon(spec.name)}
-                    isActive={selectedSpecialization === spec.name}
-                    onPress={() => setSelectedSpecialization(spec.name)}
-                    scale={scale}
-                  />
-                ))}
-              </ScrollView>
-            </View>
+              </View>
+              <TouchableOpacity activeOpacity={0.7}>
+                <SlidersHorizontal size={18 * scale} color="#595959" />
+              </TouchableOpacity>
+            </Animated.View>
           </Animated.View>
 
-          {/* Scrollable Cards Area - White Background */}
-          <Animated.ScrollView
-            style={[styles.scrollableContent, {
-              backgroundColor: '#FFFFFF',
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            }]}
+          {/* Filter Chips */}
+          <View style={[styles.filterContainer, { paddingVertical: 10 * scale }]}>
+            <FlatList
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              data={[{ id: 'all', name: 'All' }, ...specializations]}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ paddingHorizontal: 20 * scale }}
+              renderItem={({ item }) => (
+                <FilterChip
+                  label={item.name}
+                  icon={item.id === 'all' ? Grid : getSpecializationIcon(item.name)}
+                  isActive={selectedSpecialization === (item.id === 'all' ? null : item.name)}
+                  onPress={() => setSelectedSpecialization(item.id === 'all' ? null : item.name)}
+                  scale={scale}
+                />
+              )}
+            />
+          </View>
+
+          {/* Main Content */}
+          <Animated.FlatList
+            data={astrologers}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{
+              paddingHorizontal: 18 * scale,
+              paddingBottom: 100 * scale,
+              paddingTop: 10 * scale,
+            }}
+            onScroll={scrollHandler}
+            scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
-            bounces={true}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -467,23 +447,14 @@ const BrowseChatScreen = ({ navigation }: any) => {
                 colors={['#2930a6']}
               />
             }
-          >
-            {/* Astrologers List */}
-            <View style={[styles.astrologersContainer, {
-              paddingHorizontal: 18 * scale,
-              paddingTop: 20 * scale,
-              paddingBottom: 100 * scale
-            }]}>
-              {dataLoading && astrologers.length === 0 ? (
-                <>
+            ListEmptyComponent={
+              dataLoading ? (
+                <View>
                   {[1, 2, 3, 4, 5].map((index) => (
-                    <AstrologerCardSkeleton
-                      key={index}
-                      scale={scale}
-                    />
+                    <AstrologerCardSkeleton key={index} scale={scale} />
                   ))}
-                </>
-              ) : astrologers.length === 0 ? (
+                </View>
+              ) : (
                 <View style={styles.emptyContainer}>
                   <Sparkles size={48 * scale} color="#FFCF0D" />
                   <Text style={[styles.emptyText, { fontSize: 16 * scale, marginTop: 16 * scale }]}>
@@ -493,25 +464,9 @@ const BrowseChatScreen = ({ navigation }: any) => {
                     Try adjusting your search or filters
                   </Text>
                 </View>
-              ) : (
-                <>
-                  {astrologers.map((astrologer, index) => (
-                    <AstrologerCard
-                      key={astrologer.id}
-                      astrologer={astrologer}
-                      index={index}
-                      scale={scale}
-                      animValue={cardsAnim[index] || new Animated.Value(1)}
-                      isLast={index === astrologers.length - 1}
-                      onStartChat={handleStartChat}
-                      loadingAstrologerId={loadingAstrologerId}
-                      navigation={navigation}
-                    />
-                  ))}
-                </>
-              )}
-            </View>
-          </Animated.ScrollView>
+              )
+            }
+          />
 
           {/* Bottom Navigation */}
           <BottomNavBar
@@ -537,7 +492,6 @@ const BrowseChatScreen = ({ navigation }: any) => {
         pricePerMinute={insufficientBalanceData.pricePerMinute}
         onRecharge={() => {
           setInsufficientBalanceData({ ...insufficientBalanceData, visible: false });
-          // TODO: Navigate to wallet/recharge screen when implemented
           NotificationService.info('Wallet recharge screen will be implemented soon.', 'Recharge');
         }}
         onCancel={() => {
@@ -551,30 +505,25 @@ const BrowseChatScreen = ({ navigation }: any) => {
 // Astrologer Card Component
 const AstrologerCard = ({
   astrologer,
-  index,
   scale,
-  animValue,
-  isLast,
   onStartChat,
   loadingAstrologerId,
   navigation
 }: any) => {
-  const scaleValue = useRef(new Animated.Value(1)).current;
+  const scaleValue = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scaleValue.value }],
+    };
+  });
 
   const onPressIn = () => {
-    Animated.spring(scaleValue, {
-      toValue: 0.98,
-      useNativeDriver: true,
-    }).start();
+    scaleValue.value = withSpring(0.98);
   };
 
   const onPressOut = () => {
-    Animated.spring(scaleValue, {
-      toValue: 1,
-      friction: 3,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
+    scaleValue.value = withSpring(1);
   };
 
   const handlePress = () => {
@@ -582,33 +531,13 @@ const AstrologerCard = ({
   };
 
   return (
-    <Animated.View
-      style={[
-        styles.astrologerCard,
-        {
-          height: 151 * scale,
-          borderRadius: 16 * scale,
-          padding: 12 * scale,
-          marginBottom: isLast ? 0 : 16 * scale,
-          opacity: animValue,
-          transform: [
-            { scale: scaleValue },
-            {
-              translateY: animValue.interpolate({
-                inputRange: [0, 1],
-                outputRange: [30, 0],
-              }),
-            },
-          ],
-        },
-      ]}
-    >
+    <Animated.View style={[styles.astrologerCard, animatedStyle, { marginBottom: 16 * scale }]}>
       <TouchableOpacity
         onPress={handlePress}
         onPressIn={onPressIn}
         onPressOut={onPressOut}
         activeOpacity={1}
-        style={styles.astrologerCardInner}
+        style={[styles.astrologerCardInner, { padding: 12 * scale, borderRadius: 16 * scale }]}
       >
         {/* Profile Image */}
         <View style={[styles.astrologerImageContainer, {
@@ -617,7 +546,7 @@ const AstrologerCard = ({
           borderRadius: 46.5 * scale
         }]}>
           <Image
-            source={typeof astrologer.image === 'string' ? { uri: astrologer.image } : astrologer.image}
+            source={getImageSource(astrologer.image)}
             style={styles.astrologerImage}
             resizeMode="cover"
           />
@@ -633,7 +562,6 @@ const AstrologerCard = ({
             >
               {astrologer.name}
             </Text>
-            {/* Verified Badge - Instagram style on right */}
             {astrologer.isAvailable && (
               <View style={[styles.verifiedBadgeRight, {
                 width: 20 * scale,
@@ -661,18 +589,17 @@ const AstrologerCard = ({
             Exp - {astrologer.experience} Years
           </Text>
 
-          {/* Rating and Price Row */}
+          {/* Rating */}
           <View style={[styles.bottomRow, { marginTop: 8 * scale }]}>
-            {/* Rating Stars */}
             <View style={styles.ratingRow}>
               {[1, 2, 3, 4, 5].map((star) => (
-                <Star
-                  key={star}
-                  size={16 * scale}
-                  fill={star <= Math.floor(astrologer.rating) ? '#FFCF0D' : 'transparent'}
-                  color="#FFCF0D"
-                  strokeWidth={1}
-                />
+                <View key={star} style={{ marginRight: 2 }}>
+                  <Sparkles
+                    size={12 * scale}
+                    fill={star <= Math.floor(astrologer.rating) ? '#FFCF0D' : 'transparent'}
+                    color={star <= Math.floor(astrologer.rating) ? '#FFCF0D' : '#E0E0E0'}
+                  />
+                </View>
               ))}
             </View>
           </View>
@@ -681,7 +608,7 @@ const AstrologerCard = ({
           </Text>
         </View>
 
-        {/* Right Side - Price & Chat Button */}
+        {/* Right Side */}
         <View style={styles.rightSection}>
           <View style={[styles.priceRow, { marginTop: 50 * scale }]}>
             <IndianRupee size={12 * scale} color="#2930A6" />
@@ -701,7 +628,7 @@ const AstrologerCard = ({
             {loadingAstrologerId === astrologer.id ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-              <Text style={[styles.chatButtonText, { fontSize: 18 * scale }]}>Chat</Text>
+              <Text style={[styles.chatButtonText, { fontSize: 14 * scale }]}>Chat</Text>
             )}
           </AnimatedButton>
         </View>
@@ -711,23 +638,28 @@ const AstrologerCard = ({
 };
 
 // Filter Chip Component
-const FilterChip = ({ label, icon: Icon, isActive, isFilterButton, onPress, scale }: any) => {
-  const scaleValue = useRef(new Animated.Value(1)).current;
+const FilterChip = ({ label, icon: Icon, isActive, onPress, scale }: any) => {
+  const scaleValue = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scaleValue.value }],
+      backgroundColor: withTiming(isActive ? '#2930A6' : '#FFFFFF', { duration: 200 }),
+    };
+  });
+
+  const textStyle = useAnimatedStyle(() => {
+    return {
+      color: withTiming(isActive ? '#FFFFFF' : '#595959', { duration: 200 }),
+    };
+  });
 
   const onPressIn = () => {
-    Animated.spring(scaleValue, {
-      toValue: 0.95,
-      useNativeDriver: true,
-    }).start();
+    scaleValue.value = withSpring(0.95);
   };
 
   const onPressOut = () => {
-    Animated.spring(scaleValue, {
-      toValue: 1,
-      friction: 3,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
+    scaleValue.value = withSpring(1);
   };
 
   return (
@@ -740,52 +672,52 @@ const FilterChip = ({ label, icon: Icon, isActive, isFilterButton, onPress, scal
       <Animated.View
         style={[
           styles.filterChip,
+          animatedStyle,
           {
             height: 38 * scale,
             borderRadius: 20 * scale,
-            paddingHorizontal: 20 * scale,
-            backgroundColor: isFilterButton ? '#FFCF0D' : isActive ? '#2930A6' : 'rgba(41, 48, 166, 0.3)',
+            paddingHorizontal: 16 * scale,
             marginRight: 8 * scale,
-            transform: [{ scale: scaleValue }],
+            borderWidth: 1,
+            borderColor: isActive ? '#2930A6' : '#E0E0E0',
           },
         ]}
       >
-        {Icon && <Icon size={20 * scale} color={isFilterButton ? '#2930A6' : '#FFFFFF'} />}
-        <Text
+        {Icon && <Icon size={16 * scale} color={isActive ? '#FFFFFF' : '#595959'} />}
+        <Animated.Text
           style={[
             styles.filterChipText,
+            textStyle,
             {
-              fontSize: 16 * scale,
-              color: isFilterButton ? '#2930A6' : '#FFFFFF',
+              fontSize: 14 * scale,
               marginLeft: Icon ? 8 * scale : 0,
+              fontFamily: 'Lexend_500Medium',
             },
           ]}
         >
           {label}
-        </Text>
+        </Animated.Text>
       </Animated.View>
     </TouchableOpacity>
   );
 };
 
-// Animated Button Component with scale effect
+// Animated Button Component
 const AnimatedButton = ({ children, onPress, style }: any) => {
-  const scaleValue = useRef(new Animated.Value(1)).current;
+  const scaleValue = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scaleValue.value }],
+    };
+  });
 
   const onPressIn = () => {
-    Animated.spring(scaleValue, {
-      toValue: 0.95,
-      useNativeDriver: true,
-    }).start();
+    scaleValue.value = withSpring(0.95);
   };
 
   const onPressOut = () => {
-    Animated.spring(scaleValue, {
-      toValue: 1,
-      friction: 3,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
+    scaleValue.value = withSpring(1);
   };
 
   return (
@@ -795,7 +727,7 @@ const AnimatedButton = ({ children, onPress, style }: any) => {
       onPressOut={onPressOut}
       activeOpacity={1}
     >
-      <Animated.View style={[style, { transform: [{ scale: scaleValue }] }]}>
+      <Animated.View style={[style, animatedStyle]}>
         {children}
       </Animated.View>
     </TouchableOpacity>
@@ -805,218 +737,137 @@ const AnimatedButton = ({ children, onPress, style }: any) => {
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#F5F5F5',
   },
   safeArea: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  stickyHeader: {
-    zIndex: 10,
-  },
-  scrollableContent: {
     flex: 1,
   },
   yellowHeader: {
     backgroundColor: '#FFCF0D',
-    borderBottomLeftRadius: 50,
-    borderBottomRightRadius: 50,
-    paddingBottom: 24,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    paddingTop: Platform.OS === 'android' ? 40 : 0,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    zIndex: 10,
+    overflow: 'hidden',
   },
-  header: {
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 10,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
   },
   profileCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#D9D9D9',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
+    marginRight: 12,
     borderWidth: 2,
-    borderColor: 'rgba(41, 48, 166, 0.2)',
+    borderColor: '#FFFFFF',
   },
   profileImage: {
     width: '100%',
     height: '100%',
+    borderRadius: 50,
   },
   greetingContainer: {
-    flexDirection: 'column',
+    justifyContent: 'center',
   },
   heyText: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 16,
-    color: '#595959',
+    fontFamily: 'Lexend_400Regular',
+    color: '#2930A6',
   },
   nameText: {
-    fontFamily: 'Nunito_800ExtraBold',
-    fontSize: 16,
-    color: '#595959',
+    fontFamily: 'Lexend_600SemiBold',
+    color: '#2930A6',
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   walletButton: {
-    backgroundColor: '#2930A6',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 0, 0, 0.15)',
-    shadowColor: '#2930A6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: '#2930A6',
+    justifyContent: 'center',
   },
   walletText: {
-    fontFamily: 'Lexend_400Regular',
-    fontSize: 16,
+    fontFamily: 'Lexend_600SemiBold',
     color: '#FFFFFF',
+    marginLeft: 4,
   },
   bellButton: {
-    width: 32,
-    height: 32,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
   },
   searchLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
     flex: 1,
+    gap: 10,
   },
   searchInput: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 12,
-    color: '#595959',
     flex: 1,
-    paddingVertical: 8,
+    fontFamily: 'Lexend_400Regular',
+    color: '#2930A6',
+    paddingVertical: 0,
   },
   filterContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  filterDivider: {
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  filterDividerLine: {
-    width: 2,
-    height: 14,
-    backgroundColor: '#000000',
+    backgroundColor: '#F5F5F5',
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
   },
   filterChipText: {
     fontFamily: 'Lexend_500Medium',
-    fontSize: 16,
-  },
-  astrologersContainer: {
-    width: '100%',
-  },
-  loadingContainer: {
-    paddingVertical: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    fontFamily: 'Lexend_400Regular',
-    fontSize: 14,
-    color: '#666666',
-  },
-  emptyContainer: {
-    paddingVertical: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyText: {
-    fontFamily: 'Lexend_600SemiBold',
-    fontSize: 16,
-    color: '#333333',
-  },
-  emptySubtext: {
-    fontFamily: 'Lexend_400Regular',
-    fontSize: 12,
-    color: '#666666',
   },
   astrologerCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    shadowColor: '#2930A6',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.05,
     shadowRadius: 8,
-    elevation: 5,
-    borderWidth: 1,
-    borderColor: 'rgba(41, 48, 166, 0.08)',
+    elevation: 2,
   },
   astrologerCardInner: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    width: '100%',
+    backgroundColor: '#FFFFFF',
   },
   astrologerImageContainer: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 46.5,
-    overflow: 'visible',
-    position: 'relative',
+    marginRight: 12,
     borderWidth: 2,
     borderColor: '#FFCF0D',
+    overflow: 'hidden',
   },
   astrologerImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 46.5,
-  },
-  verifiedBadge: {
-    position: 'absolute',
   },
   astrologerInfo: {
     flex: 1,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
   },
   nameRow: {
     flexDirection: 'row',
@@ -1024,82 +875,73 @@ const styles = StyleSheet.create({
   },
   astrologerName: {
     fontFamily: 'Lexend_600SemiBold',
-    fontSize: 18,
     color: '#000000',
-    letterSpacing: -0.54,
     flexShrink: 1,
   },
   verifiedBadgeRight: {
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
   specializationText: {
     fontFamily: 'Lexend_400Regular',
-    fontSize: 10,
     color: '#595959',
-    letterSpacing: -0.3,
   },
   languagesText: {
     fontFamily: 'Lexend_400Regular',
-    fontSize: 10,
     color: '#595959',
-    letterSpacing: -0.3,
   },
   experienceText: {
     fontFamily: 'Lexend_400Regular',
-    fontSize: 10,
     color: '#595959',
-    letterSpacing: -0.3,
   },
   bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
   },
   ordersText: {
-    fontFamily: 'Lexend_400Regular',
-    fontSize: 10,
+    fontFamily: 'Lexend_300Light',
     color: '#000000',
-    letterSpacing: -0.3,
   },
   rightSection: {
     alignItems: 'flex-end',
     justifyContent: 'space-between',
+    paddingLeft: 8,
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
   },
   priceText: {
-    fontFamily: 'Lexend_400Regular',
-    fontSize: 10,
+    fontFamily: 'Lexend_500Medium',
     color: '#2930A6',
-    letterSpacing: -0.3,
+    marginLeft: 2,
   },
   chatButton: {
     backgroundColor: '#2930A6',
-    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#2930A6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
   },
   chatButtonText: {
-    fontFamily: 'Lexend_400Regular',
-    fontSize: 18,
+    fontFamily: 'Lexend_600SemiBold',
     color: '#FFFFFF',
-    letterSpacing: -0.54,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 50,
+  },
+  emptyText: {
+    fontFamily: 'Lexend_600SemiBold',
+    color: '#2930A6',
+  },
+  emptySubtext: {
+    fontFamily: 'Lexend_400Regular',
+    color: '#595959',
   },
 });
 

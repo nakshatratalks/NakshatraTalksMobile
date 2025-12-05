@@ -1,6 +1,7 @@
 /**
  * ProfileScreen Component
  * Displays and allows editing of user profile information
+ * Refactored for Premium UI/UX
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
@@ -19,11 +20,15 @@ import {
   Alert,
   Modal,
   Platform,
+  KeyboardAvoidingView,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import { StatusBar, setStatusBarStyle } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   Lexend_400Regular,
   Lexend_500Medium,
@@ -40,6 +45,11 @@ import {
   Save,
   ChevronDown,
   X,
+  Camera,
+  Phone,
+  Mail,
+  LogOut,
+  ChevronRight,
 } from 'lucide-react-native';
 import { useResponsiveLayout } from '../src/utils/responsive';
 import { useProfileData } from '../src/hooks/useProfileData';
@@ -47,12 +57,17 @@ import { useAuth } from '../src/contexts/AuthContext';
 import NotificationService from '../src/utils/notificationService';
 import Sidebar from '../components/Sidebar';
 import { BottomNavBar } from '../components/BottomNavBar';
-import { SkeletonCircle, SkeletonBox, SkeletonText } from '../components/skeleton';
+import { SkeletonCircle, SkeletonBox } from '../components/skeleton';
+
+// Enable LayoutAnimation for Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const ProfileScreen = ({ navigation }: any) => {
   // Hooks
   const { userProfile, loading, error, refetch, updateProfile, updating } = useProfileData();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { cardWidth, scale } = useResponsiveLayout();
 
   // Load Fonts
@@ -88,9 +103,9 @@ const ProfileScreen = ({ navigation }: any) => {
     gender: null as 'male' | 'female' | 'other' | null,
   });
 
-  // Animation - Initialize to final values (no entrance animation - screens stay mounted)
+  // Animation
   const fadeAnim = useRef(new Animated.Value(1)).current;
-  const slideAnim = useRef(new Animated.Value(0)).current;
+  const editButtonScale = useRef(new Animated.Value(1)).current;
 
   // Initialize form with user data
   useEffect(() => {
@@ -106,15 +121,11 @@ const ProfileScreen = ({ navigation }: any) => {
     }
   }, [userProfile]);
 
-  // No mount animation needed - screens stay mounted via Tab Navigator
-  // Values are already initialized to final state
-
-  // Set status bar based on sidebar state when screen is focused
-  // Only set dark if sidebar is NOT open, to avoid overriding sidebar's light status bar
+  // Set status bar
   useFocusEffect(
     useCallback(() => {
       if (!sidebarVisible) {
-        setStatusBarStyle('dark');
+        setStatusBarStyle('dark'); // Dark content for yellow header
       }
     }, [sidebarVisible])
   );
@@ -131,9 +142,16 @@ const ProfileScreen = ({ navigation }: any) => {
     }
   };
 
-
   // Handle edit mode toggle
   const handleEditToggle = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+
+    // Animate button
+    Animated.sequence([
+      Animated.timing(editButtonScale, { toValue: 0.8, duration: 100, useNativeDriver: true }),
+      Animated.timing(editButtonScale, { toValue: 1, duration: 100, useNativeDriver: true }),
+    ]).start();
+
     if (isEditing) {
       // Cancel edit - reset form
       if (userProfile) {
@@ -181,9 +199,6 @@ const ProfileScreen = ({ navigation }: any) => {
       setTempDate(selectedDate);
       const formattedDate = formatDateForStorage(selectedDate);
       setEditedProfile({ ...editedProfile, dateOfBirth: formattedDate });
-      if (Platform.OS === 'android') {
-        setShowDatePicker(false);
-      }
     }
   };
 
@@ -202,9 +217,6 @@ const ProfileScreen = ({ navigation }: any) => {
       setTempTime(selectedTime);
       const formattedTime = formatTimeForStorage(selectedTime);
       setEditedProfile({ ...editedProfile, timeOfBirth: formattedTime });
-      if (Platform.OS === 'android') {
-        setShowTimePicker(false);
-      }
     }
   };
 
@@ -252,29 +264,26 @@ const ProfileScreen = ({ navigation }: any) => {
   // Open time picker
   const openTimePicker = () => {
     if (editedProfile.timeOfBirth) {
-      const [time, period] = editedProfile.timeOfBirth.split(' ');
-      const [hoursStr, minutes] = time.split(':');
-      let hours = parseInt(hoursStr, 10);
-      if (period === 'PM' && hours !== 12) hours += 12;
-      if (period === 'AM' && hours === 12) hours = 0;
-      const parsedTime = new Date();
-      parsedTime.setHours(hours, parseInt(minutes, 10));
-      setTempTime(parsedTime);
+      // Basic parsing for "HH:MM AM/PM"
+      try {
+        const [time, period] = editedProfile.timeOfBirth.split(' ');
+        const [hoursStr, minutes] = time.split(':');
+        let hours = parseInt(hoursStr, 10);
+        if (period === 'PM' && hours !== 12) hours += 12;
+        if (period === 'AM' && hours === 12) hours = 0;
+        const parsedTime = new Date();
+        parsedTime.setHours(hours, parseInt(minutes, 10));
+        setTempTime(parsedTime);
+      } catch (e) {
+        setTempTime(new Date());
+      }
     }
     setShowTimePicker(true);
   };
 
-  // Wait only for fonts, not for data
-  if (!fontsLoaded) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2930A6" />
-      </View>
-    );
-  }
-
   // Format phone number
   const formatPhoneNumber = (phone: string) => {
+    if (!phone) return { countryCode: '+91', number: '' };
     if (phone.startsWith('+91')) {
       const number = phone.substring(3);
       return {
@@ -290,21 +299,29 @@ const ProfileScreen = ({ navigation }: any) => {
 
   const { countryCode, number: formattedNumber } = userProfile ? formatPhoneNumber(userProfile.phone) : { countryCode: '+91', number: '' };
 
-  // Format date
+  // Format date for display
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'Not set';
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString; // Fallback if invalid
     const day = date.getDate().toString().padStart(2, '0');
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const month = months[date.getMonth()];
     const year = date.getFullYear();
-    return `${day} - ${month} - ${year}`;
+    return `${day} ${month}, ${year}`;
   };
+
+  if (!fontsLoaded) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2930A6" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
-      {/* Sidebar */}
       <Sidebar
         visible={sidebarVisible}
         onClose={() => setSidebarVisible(false)}
@@ -312,230 +329,250 @@ const ProfileScreen = ({ navigation }: any) => {
       />
 
       <Animated.View style={[styles.mainContent, { opacity: fadeAnim }]}>
-        {/* Profile Header Section - Split into Left (Yellow) and Right (White) - FIXED HEIGHT */}
-        <View style={[styles.profileHeader, { height: 240 * scale }]}>
-          {/* Left Container - Yellow Background with Profile Image and Name */}
-          <View style={styles.leftContainer}>
-            {/* Title at Top */}
-            <Text style={[styles.headerTitle, { fontSize: 18 * scale, marginTop: 50 * scale, marginBottom: 10 * scale, marginLeft: 15 * scale }]}>
-              Profile
-            </Text>
-
-            {/* Profile Image */}
-            {loading || !userProfile ? (
-              <SkeletonPlaceholder
-                width={90 * scale}
-                height={90 * scale}
-                borderRadius={45 * scale}
-                style={{ marginTop: 10 * scale }}
-              />
-            ) : (
-              <Image
-                source={
-                  userProfile.profileImage
-                    ? { uri: userProfile.profileImage }
-                    : require('../assets/images/astrologer1.png')
-                }
-                style={[styles.profileImage, { width: 90 * scale, height: 90 * scale, borderRadius: 45 * scale }]}
-              />
-            )}
-
-            {/* User Name */}
-            {loading || !userProfile ? (
-              <SkeletonPlaceholder
-                width={120 * scale}
-                height={20 * scale}
-                style={{ marginTop: 10 * scale }}
-              />
-            ) : (
-              <Text style={[styles.userName, { fontSize: 16 * scale, marginTop: 10 * scale }]}>
-                {userProfile.name || 'User'}
-              </Text>
-            )}
-          </View>
-
-          {/* Right Container - White Background with Contact Information */}
-          <View style={styles.rightContainer}>
-            {/* Edit/Save Button */}
-            <TouchableOpacity
-              style={[styles.editButton, { top: 50 * scale, right: 10 * scale }]}
-              onPress={isEditing ? handleSave : handleEditToggle}
-              disabled={updating}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={{ paddingBottom: 120 * scale }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor="#2930A6"
+              colors={['#2930A6']}
+            />
+          }
+        >
+          {/* Header Section */}
+          <View style={styles.headerContainer}>
+            <LinearGradient
+              colors={['#FFCF0D', '#FFD700']}
+              style={styles.headerGradient}
             >
-              {updating ? (
-                <ActivityIndicator size="small" color="#2930A6" />
-              ) : isEditing ? (
-                <Save size={20 * scale} color="#2930A6" />
-              ) : (
-                <Edit3 size={20 * scale} color="#2930A6" />
-              )}
-            </TouchableOpacity>
+              {/* Top Bar */}
+              <SafeAreaView edges={['top']} style={styles.topBar}>
+                <TouchableOpacity
+                  onPress={() => setSidebarVisible(true)}
+                  style={styles.menuButton}
+                >
+                  {/* Menu Icon would go here if needed */}
+                </TouchableOpacity>
+                <Text style={[styles.headerTitle, { fontSize: 18 * scale }]}>Profile</Text>
+                <View style={{ width: 40 }} />
+              </SafeAreaView>
 
-            {/* Contact Info */}
-            <View style={[styles.contactInfo, { marginTop: 85 * scale }]}>
-              {loading || !userProfile ? (
-                <>
-                  {/* Skeleton for contact info */}
-                  {[1, 2, 3, 4].map((item) => (
-                    <View key={item} style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
-                      <SkeletonPlaceholder width={80 * scale} height={12 * scale} style={{ marginBottom: 4 * scale }} />
-                      <SkeletonPlaceholder width={100 * scale} height={10 * scale} />
+              {/* Profile Info */}
+              <View style={[styles.profileInfoContainer, { marginTop: 20 * scale }]}>
+                <View style={styles.profileImageWrapper}>
+                  {loading || !userProfile ? (
+                    <SkeletonCircle size={100 * scale} />
+                  ) : (
+                    <View>
+                      <Image
+                        source={
+                          userProfile.profileImage
+                            ? { uri: userProfile.profileImage }
+                            : require('../assets/images/astrologer1.png')
+                        }
+                        style={[styles.profileImage, { width: 100 * scale, height: 100 * scale, borderRadius: 50 * scale }]}
+                      />
+                      {isEditing && (
+                        <TouchableOpacity style={styles.cameraButton}>
+                          <Camera size={16 * scale} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      )}
                     </View>
-                  ))}
-                </>
-              ) : (
-                <>
-                  {/* Phone Number */}
-                  <View style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
-                    <Text style={[styles.infoLabel, { fontSize: 13 * scale }]}>Phone Number</Text>
-                    <Text style={[styles.infoValue, { fontSize: 12 * scale }]} numberOfLines={1} ellipsizeMode="tail">
+                  )}
+                </View>
+
+                {loading || !userProfile ? (
+                  <SkeletonBox width={150 * scale} height={24 * scale} style={{ marginTop: 16 * scale }} />
+                ) : (
+                  <View style={styles.nameContainer}>
+                    {isEditing ? (
+                      <TextInput
+                        style={[styles.nameInput, { fontSize: 20 * scale }]}
+                        value={editedProfile.name}
+                        onChangeText={(text) => setEditedProfile({ ...editedProfile, name: text })}
+                        placeholder="Enter Name"
+                        placeholderTextColor="rgba(41, 48, 166, 0.6)"
+                        selectionColor="#2930A6"
+                      />
+                    ) : (
+                      <Text style={[styles.userName, { fontSize: 20 * scale }]}>
+                        {userProfile.name || 'User'}
+                      </Text>
+                    )}
+                    <Text style={[styles.userPhone, { fontSize: 14 * scale }]}>
                       {countryCode} {formattedNumber}
                     </Text>
                   </View>
+                )}
+              </View>
+            </LinearGradient>
 
-                  {/* City/Town */}
-                  <View style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
-                    <Text style={[styles.infoLabel, { fontSize: 13 * scale }]}>City/Town</Text>
-                    <Text style={[styles.infoValue, { fontSize: 12 * scale }]} numberOfLines={1} ellipsizeMode="tail">Chennai</Text>
-                  </View>
-
-                  {/* Address */}
-                  <View style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
-                    <Text style={[styles.infoLabel, { fontSize: 13 * scale }]}>Address</Text>
-                    <Text style={[styles.infoValue, { fontSize: 12 * scale }]} numberOfLines={2} ellipsizeMode="tail">
-                      No 45, abc nagar, 1st street
-                    </Text>
-                  </View>
-
-                  {/* Pincode */}
-                  <View style={[styles.infoGroup, { marginBottom: 6 * scale }]}>
-                    <Text style={[styles.infoLabel, { fontSize: 13 * scale }]}>Pincode</Text>
-                    <Text style={[styles.infoValue, { fontSize: 12 * scale }]} numberOfLines={1} ellipsizeMode="tail">600 026</Text>
-                  </View>
-                </>
-              )}
-            </View>
+            {/* Floating Edit Button */}
+            <Animated.View style={[
+              styles.floatingEditButtonContainer,
+              {
+                top: 250 * scale,
+                right: 30 * scale,
+                transform: [{ scale: editButtonScale }]
+              }
+            ]}>
+              <TouchableOpacity
+                style={[styles.floatingEditButton, { backgroundColor: isEditing ? '#4CAF50' : '#2930A6' }]}
+                onPress={isEditing ? handleSave : handleEditToggle}
+                disabled={updating}
+                activeOpacity={0.8}
+              >
+                {updating ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : isEditing ? (
+                  <Save size={24 * scale} color="#FFFFFF" />
+                ) : (
+                  <Edit3 size={24 * scale} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
+            </Animated.View>
           </View>
-        </View>
 
-        {/* Birth Details Section - Scrollable */}
-        <ScrollView
-          style={styles.scrollableContent}
-          contentContainerStyle={[styles.birthDetailsSection, { paddingHorizontal: 20 * scale, paddingTop: 15 * scale, paddingBottom: 100 * scale }]}
-          showsVerticalScrollIndicator={false}
-        >
-          {loading || !userProfile ? (
-            <>
-              {/* Skeleton for birth details */}
-              {[1, 2, 3, 4].map((item) => (
-                <View key={item} style={[styles.formGroup, { marginTop: item > 1 ? 20 * scale : 0 }]}>
-                  <SkeletonPlaceholder width={120 * scale} height={16 * scale} style={{ marginBottom: 12 * scale }} />
-                  <SkeletonPlaceholder width={'100%'} height={37 * scale} borderRadius={12 * scale} />
+          {/* Content Section */}
+          <View style={styles.contentContainer}>
+
+            {/* Personal Details Card */}
+            <View style={[styles.card, { padding: 20 * scale, borderRadius: 24 * scale }]}>
+              <Text style={[styles.sectionTitle, { fontSize: 18 * scale }]}>Personal Details</Text>
+
+              {/* Email */}
+              <View style={[styles.detailRow, { marginTop: 16 * scale }]}>
+                <View style={styles.iconContainer}>
+                  <Mail size={20 * scale} color="#2930A6" />
                 </View>
-              ))}
-            </>
-          ) : (
-            <>
+                <View style={styles.detailContent}>
+                  <Text style={[styles.detailLabel, { fontSize: 12 * scale }]}>Email Address</Text>
+                  {isEditing ? (
+                    <TextInput
+                      style={[styles.detailInput, { fontSize: 14 * scale }]}
+                      value={editedProfile.email}
+                      onChangeText={(text) => setEditedProfile({ ...editedProfile, email: text })}
+                      placeholder="Enter Email"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                  ) : (
+                    <Text style={[styles.detailValue, { fontSize: 14 * scale }]}>
+                      {userProfile?.email || 'Not set'}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {/* Gender */}
+              <View style={[styles.detailRow, { marginTop: 16 * scale }]}>
+                <View style={styles.iconContainer}>
+                  <Users size={20 * scale} color="#2930A6" />
+                </View>
+                <View style={styles.detailContent}>
+                  <Text style={[styles.detailLabel, { fontSize: 12 * scale }]}>Gender</Text>
+                  {isEditing ? (
+                    <TouchableOpacity onPress={() => setShowGenderPicker(true)}>
+                      <Text style={[styles.detailInput, { fontSize: 14 * scale, color: editedProfile.gender ? '#1A1A1A' : '#999' }]}>
+                        {editedProfile.gender ? editedProfile.gender.charAt(0).toUpperCase() + editedProfile.gender.slice(1) : 'Select Gender'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={[styles.detailValue, { fontSize: 14 * scale }]}>
+                      {userProfile?.gender ? userProfile.gender.charAt(0).toUpperCase() + userProfile.gender.slice(1) : 'Not set'}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </View>
+
+            {/* Birth Details Card */}
+            <View style={[styles.card, { padding: 20 * scale, borderRadius: 24 * scale, marginTop: 20 * scale }]}>
+              <Text style={[styles.sectionTitle, { fontSize: 18 * scale }]}>Birth Details</Text>
+
               {/* Date of Birth */}
-              <View style={styles.formGroup}>
-                <Text style={[styles.formLabel, { fontSize: 16 * scale }]}>Date of Birth</Text>
-                {isEditing ? (
-                <TouchableOpacity
-                  onPress={openDatePicker}
-                  style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}
-                  activeOpacity={0.7}
-                >
-                  <Calendar size={24 * scale} color="#FFCF0D" />
-                  <Text style={[styles.input, { fontSize: 14 * scale, marginLeft: 12 * scale, color: editedProfile.dateOfBirth ? '#2930A6' : '#AAAAAA' }]}>
-                    {editedProfile.dateOfBirth ? formatDate(editedProfile.dateOfBirth) : 'Select date'}
-                  </Text>
-                  <ChevronDown size={18 * scale} color="#2930A6" />
-                </TouchableOpacity>
-              ) : (
-                <View style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}>
-                  <Calendar size={24 * scale} color="#FFCF0D" />
-                  <Text style={[styles.inputText, { fontSize: 14 * scale, marginLeft: 12 * scale }]}>
-                    {formatDate(userProfile.dateOfBirth)}
-                  </Text>
+              <View style={[styles.detailRow, { marginTop: 16 * scale }]}>
+                <View style={styles.iconContainer}>
+                  <Calendar size={20 * scale} color="#2930A6" />
                 </View>
-              )}
+                <View style={styles.detailContent}>
+                  <Text style={[styles.detailLabel, { fontSize: 12 * scale }]}>Date of Birth</Text>
+                  {isEditing ? (
+                    <TouchableOpacity onPress={openDatePicker}>
+                      <Text style={[styles.detailInput, { fontSize: 14 * scale, color: editedProfile.dateOfBirth ? '#1A1A1A' : '#999' }]}>
+                        {editedProfile.dateOfBirth ? formatDate(editedProfile.dateOfBirth) : 'Select Date'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={[styles.detailValue, { fontSize: 14 * scale }]}>
+                      {formatDate(userProfile?.dateOfBirth)}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {/* Time of Birth */}
+              <View style={[styles.detailRow, { marginTop: 16 * scale }]}>
+                <View style={styles.iconContainer}>
+                  <Clock size={20 * scale} color="#2930A6" />
+                </View>
+                <View style={styles.detailContent}>
+                  <Text style={[styles.detailLabel, { fontSize: 12 * scale }]}>Time of Birth</Text>
+                  {isEditing ? (
+                    <TouchableOpacity onPress={openTimePicker}>
+                      <Text style={[styles.detailInput, { fontSize: 14 * scale, color: editedProfile.timeOfBirth ? '#1A1A1A' : '#999' }]}>
+                        {editedProfile.timeOfBirth || 'Select Time'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={[styles.detailValue, { fontSize: 14 * scale }]}>
+                      {userProfile?.timeOfBirth || 'Not set'}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {/* Place of Birth */}
+              <View style={[styles.detailRow, { marginTop: 16 * scale }]}>
+                <View style={styles.iconContainer}>
+                  <MapPin size={20 * scale} color="#2930A6" />
+                </View>
+                <View style={styles.detailContent}>
+                  <Text style={[styles.detailLabel, { fontSize: 12 * scale }]}>Place of Birth</Text>
+                  {isEditing ? (
+                    <TextInput
+                      style={[styles.detailInput, { fontSize: 14 * scale }]}
+                      value={editedProfile.placeOfBirth}
+                      onChangeText={(text) => setEditedProfile({ ...editedProfile, placeOfBirth: text })}
+                      placeholder="Enter City"
+                    />
+                  ) : (
+                    <Text style={[styles.detailValue, { fontSize: 14 * scale }]}>
+                      {userProfile?.placeOfBirth || 'Not set'}
+                    </Text>
+                  )}
+                </View>
+              </View>
             </View>
 
-            {/* Place of Birth */}
-            <View style={[styles.formGroup, { marginTop: 20 * scale }]}>
-              <Text style={[styles.formLabel, { fontSize: 14 * scale }]}>Place of Birth</Text>
-              {isEditing ? (
-                <View style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}>
-                  <MapPin size={24 * scale} color="#FFCF0D" />
-                  <TextInput
-                    style={[styles.input, { fontSize: 14 * scale, marginLeft: 12 * scale }]}
-                    value={editedProfile.placeOfBirth}
-                    onChangeText={(text) => setEditedProfile({ ...editedProfile, placeOfBirth: text })}
-                    placeholder="Enter place of birth"
-                    placeholderTextColor="#AAAAAA"
-                  />
-                </View>
-              ) : (
-                <View style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}>
-                  <MapPin size={24 * scale} color="#FFCF0D" />
-                  <Text style={[styles.inputText, { fontSize: 14 * scale, marginLeft: 12 * scale }]}>
-                    {userProfile.placeOfBirth || 'Not set'}
-                  </Text>
-                </View>
-              )}
-            </View>
+            {/* Logout Button */}
+            <TouchableOpacity
+              style={[styles.logoutButton, { marginTop: 30 * scale, borderRadius: 16 * scale, height: 50 * scale }]}
+              onPress={() => {
+                Alert.alert('Logout', 'Are you sure you want to logout?', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Logout', style: 'destructive', onPress: logout },
+                ]);
+              }}
+            >
+              <LogOut size={20 * scale} color="#FF4444" />
+              <Text style={[styles.logoutText, { fontSize: 16 * scale }]}>Logout</Text>
+            </TouchableOpacity>
 
-            {/* Time of Birth */}
-            <View style={[styles.formGroup, { marginTop: 20 * scale }]}>
-              <Text style={[styles.formLabel, { fontSize: 16 * scale }]}>Time of Birth</Text>
-              {isEditing ? (
-                <TouchableOpacity
-                  onPress={openTimePicker}
-                  style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}
-                  activeOpacity={0.7}
-                >
-                  <Clock size={24 * scale} color="#FFCF0D" />
-                  <Text style={[styles.input, { fontSize: 14 * scale, marginLeft: 12 * scale, color: editedProfile.timeOfBirth ? '#2930A6' : '#AAAAAA' }]}>
-                    {editedProfile.timeOfBirth || 'Select time'}
-                  </Text>
-                  <ChevronDown size={18 * scale} color="#2930A6" />
-                </TouchableOpacity>
-              ) : (
-                <View style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}>
-                  <Clock size={24 * scale} color="#FFCF0D" />
-                  <Text style={[styles.inputText, { fontSize: 14 * scale, marginLeft: 12 * scale }]}>
-                    {userProfile.timeOfBirth || 'Not set'}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Gender */}
-            <View style={[styles.formGroup, { marginTop: 20 * scale, marginBottom: 20 * scale }]}>
-              <Text style={[styles.formLabel, { fontSize: 16 * scale }]}>Gender</Text>
-              {isEditing ? (
-                <TouchableOpacity
-                  onPress={() => setShowGenderPicker(true)}
-                  style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}
-                  activeOpacity={0.7}
-                >
-                  <Users size={24 * scale} color="#FFCF0D" />
-                  <Text style={[styles.input, { fontSize: 14 * scale, marginLeft: 12 * scale, color: editedProfile.gender ? '#2930A6' : '#AAAAAA' }]}>
-                    {editedProfile.gender ? editedProfile.gender.charAt(0).toUpperCase() + editedProfile.gender.slice(1) : 'Select gender'}
-                  </Text>
-                  <ChevronDown size={18 * scale} color="#2930A6" />
-                </TouchableOpacity>
-              ) : (
-                <View style={[styles.inputContainer, { height: 37 * scale, borderRadius: 12 * scale }]}>
-                  <Users size={24 * scale} color="#FFCF0D" />
-                  <Text style={[styles.inputText, { fontSize: 14 * scale, marginLeft: 12 * scale }]}>
-                    {userProfile.gender ? userProfile.gender.charAt(0).toUpperCase() + userProfile.gender.slice(1) : 'Not set'}
-                  </Text>
-                </View>
-              )}
-            </View>
-            </>
-          )}
+          </View>
         </ScrollView>
       </Animated.View>
 
@@ -545,6 +582,7 @@ const ProfileScreen = ({ navigation }: any) => {
         navigation={navigation}
       />
 
+      {/* Modals */}
       {/* Date Picker Modal (iOS) */}
       {Platform.OS === 'ios' && showDatePicker && (
         <Modal
@@ -632,7 +670,7 @@ const ProfileScreen = ({ navigation }: any) => {
       {/* Gender Picker Modal */}
       <Modal
         transparent
-        animationType="slide"
+        animationType="fade"
         visible={showGenderPicker}
         onRequestClose={() => setShowGenderPicker(false)}
       >
@@ -648,59 +686,35 @@ const ProfileScreen = ({ navigation }: any) => {
                 <X size={24} color="#666666" />
               </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={[styles.genderOption, editedProfile.gender === 'male' && styles.genderOptionSelected]}
-              onPress={() => handleGenderSelect('male')}
-            >
-              <Text style={[styles.genderOptionText, editedProfile.gender === 'male' && styles.genderOptionTextSelected]}>
-                Male
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.genderOption, editedProfile.gender === 'female' && styles.genderOptionSelected]}
-              onPress={() => handleGenderSelect('female')}
-            >
-              <Text style={[styles.genderOptionText, editedProfile.gender === 'female' && styles.genderOptionTextSelected]}>
-                Female
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.genderOption, editedProfile.gender === 'other' && styles.genderOptionSelected]}
-              onPress={() => handleGenderSelect('other')}
-            >
-              <Text style={[styles.genderOptionText, editedProfile.gender === 'other' && styles.genderOptionTextSelected]}>
-                Other
-              </Text>
-            </TouchableOpacity>
+            {['male', 'female', 'other'].map((g) => (
+              <TouchableOpacity
+                key={g}
+                style={[styles.genderOption, editedProfile.gender === g && styles.genderOptionSelected]}
+                onPress={() => handleGenderSelect(g as any)}
+              >
+                <Text style={[styles.genderOptionText, editedProfile.gender === g && styles.genderOptionTextSelected]}>
+                  {g.charAt(0).toUpperCase() + g.slice(1)}
+                </Text>
+                {editedProfile.gender === g && <ChevronRight size={20} color="#2930A6" />}
+              </TouchableOpacity>
+            ))}
           </View>
         </TouchableOpacity>
       </Modal>
+
     </View>
   );
-};
-
-// Skeleton Placeholder Component
-const SkeletonPlaceholder = ({ width, height, borderRadius = 8, style }: any) => {
-  if (borderRadius && borderRadius >= (typeof height === 'number' ? height / 2 : 0)) {
-    // It's a circle
-    return <SkeletonCircle size={typeof width === 'number' ? width : 0} style={style} />;
-  }
-  return <SkeletonBox width={width} height={height} borderRadius={borderRadius} style={style} />;
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F5F5F7',
   },
   mainContent: {
     flex: 1,
   },
-  content: {
-    flexShrink: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  scrollableContent: {
+  scrollView: {
     flex: 1,
   },
   loadingContainer: {
@@ -709,132 +723,170 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
   },
-  errorContainer: {
-    flex: 1,
+  headerContainer: {
+    position: 'relative',
+    marginBottom: 0,
+    zIndex: 1, // Ensure header is below content if needed, but content needs higher zIndex
+  },
+  headerGradient: {
+    width: '100%',
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    paddingHorizontal: 20,
+    paddingBottom: 50, // Added padding for flexible height
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  menuButton: {
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#DC3545',
-    textAlign: 'center',
-    marginBottom: 20,
-    fontFamily: 'Lexend_400Regular',
-  },
-  retryButton: {
-    backgroundColor: '#2930A6',
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 25,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontFamily: 'Lexend_600SemiBold',
-  },
-  profileHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-  },
-  leftContainer: {
-    flex: 0.45,
-    backgroundColor: '#FFCF0D',
-    alignItems: 'center',
-    paddingBottom: 20,
-    paddingTop: 0,
-    justifyContent: 'flex-start',
-  },
-  rightContainer: {
-    flex: 0.55,
-    backgroundColor: '#FFFFFF',
-    paddingLeft: 10,
-    paddingRight: 16,
-    paddingTop: 0,
-    justifyContent: 'flex-start',
-    overflow: 'hidden',
   },
   headerTitle: {
-    fontFamily: 'Lexend_500Medium',
-    color: '#595959',
-    alignSelf: 'flex-start',
+    fontFamily: 'Lexend_600SemiBold',
+    color: '#2930A6', // Dark blue for contrast on yellow
   },
-  editButton: {
-    alignSelf: 'flex-end',
-    width: 24,
-    height: 24,
-  },
-  cancelButton: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 24,
-    height: 24,
-  },
-  profileImageContainer: {
+  profileInfoContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
+  },
+  profileImageWrapper: {
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   profileImage: {
-    borderRadius: 55,
-    borderWidth: 3,
+    borderWidth: 4,
     borderColor: '#FFFFFF',
+  },
+  cameraButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#2930A6',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  nameContainer: {
+    alignItems: 'center',
+    marginTop: 12,
   },
   userName: {
     fontFamily: 'Poppins_600SemiBold',
-    color: '#1A1A1A',
+    color: '#2930A6', // Dark blue
     textAlign: 'center',
-    paddingHorizontal: 10,
   },
-  contactInfo: {
-    flex: 1,
+  nameInput: {
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#2930A6', // Dark blue
+    textAlign: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(41, 48, 166, 0.5)',
+    paddingBottom: 4,
+    minWidth: 150,
   },
-  infoGroup: {
+  floatingEditButtonContainer: {
+    position: 'absolute',
+    bottom: -28, // Half of button height (56/2)
+    right: 30,
+    zIndex: 10,
+  },
+  floatingEditButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  contentContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    marginTop: -30, // Pull content up over the header
+    zIndex: 2, // Ensure content sits ON TOP of the header
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  userPhone: {
+    fontFamily: 'Lexend_400Regular',
+    color: '#1A1A1A', // Black for high contrast
+    marginTop: 4,
+    marginBottom: 10, // Added margin to avoid cramping
+    fontWeight: '600',
+  },
+  sectionTitle: {
+    fontFamily: 'Lexend_600SemiBold',
+    color: '#1A1A1A',
     marginBottom: 8,
   },
-  infoLabel: {
-    fontFamily: 'Lexend_400Regular',
-    color: '#000000',
-    marginBottom: 4,
-  },
-  phoneContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  infoValue: {
-    fontFamily: 'Lexend_400Regular',
-    color: '#2930A6',
-  },
-  birthDetailsSection: {
-    paddingBottom: 20,
-    backgroundColor: '#FFFFFF',
-  },
-  formGroup: {
-    marginBottom: 20,
-  },
-  formLabel: {
-    fontFamily: 'Lexend_400Regular',
-    color: '#000000',
-    marginBottom: 12,
-  },
-  inputContainer: {
+  detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    borderWidth: 2,
-    borderColor: '#FFCF0D',
-    paddingHorizontal: 16,
-    width: '100%',
-    backgroundColor: '#FFFFFF',
   },
-  input: {
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(41, 48, 166, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  detailContent: {
     flex: 1,
-    fontFamily: 'Lexend_500Medium',
-    color: '#2930A6',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    paddingBottom: 12,
   },
-  inputText: {
+  detailLabel: {
     fontFamily: 'Lexend_400Regular',
-    color: '#2930A6',
+    color: '#666666',
+    marginBottom: 4,
+  },
+  detailValue: {
+    fontFamily: 'Lexend_500Medium',
+    color: '#1A1A1A',
+  },
+  detailInput: {
+    fontFamily: 'Lexend_500Medium',
+    color: '#1A1A1A',
+    paddingVertical: 0,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF0F0',
+    borderWidth: 1,
+    borderColor: '#FFCDCD',
+  },
+  logoutText: {
+    fontFamily: 'Lexend_600SemiBold',
+    color: '#FF4444',
+    marginLeft: 10,
   },
   // Picker Modal Styles
   pickerModalOverlay: {
@@ -844,8 +896,8 @@ const styles = StyleSheet.create({
   },
   pickerModalContent: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingBottom: 30,
   },
   pickerModalHeader: {
@@ -875,18 +927,21 @@ const styles = StyleSheet.create({
   // Gender Picker Styles
   genderPickerContent: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    marginHorizontal: 20,
+    marginBottom: 40,
+    borderRadius: 24,
+    padding: 20,
+    justifyContent: 'center',
+    alignSelf: 'center',
+    width: '90%',
+    position: 'absolute',
+    bottom: '30%',
   },
   genderPickerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
+    marginBottom: 20,
   },
   genderPickerTitle: {
     fontFamily: 'Lexend_600SemiBold',
@@ -894,15 +949,19 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
   },
   genderOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 16,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
-    borderRadius: 8,
-    marginTop: 8,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#F9F9F9',
   },
   genderOptionSelected: {
-    backgroundColor: 'rgba(41, 48, 166, 0.1)',
+    backgroundColor: 'rgba(41, 48, 166, 0.08)',
     borderColor: '#2930A6',
     borderWidth: 1,
   },

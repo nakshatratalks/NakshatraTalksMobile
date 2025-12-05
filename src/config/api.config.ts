@@ -134,4 +134,36 @@ export const API_ENDPOINTS = {
     START: (sessionId: string) => `/api/v1/live-sessions/${sessionId}/start`,
     END: (sessionId: string) => `/api/v1/live-sessions/${sessionId}/end`,
   },
+
+  // Daily Horoscope (Public API)
+  HOROSCOPE: {
+    DAILY: '/api/v1/horoscope/daily',
+    SIGNS: '/api/v1/horoscope/signs',
+  },
+
+  // Places Search (Public API)
+  PLACES: {
+    SEARCH: '/api/v1/places/search',
+    POPULAR: '/api/v1/places/popular',
+    REVERSE: '/api/v1/places/reverse',
+  },
+
+  // Kundli (Protected API)
+  KUNDLI: {
+    GENERATE: '/api/v1/kundli/generate',
+    LIST: '/api/v1/kundli/list',
+    GET_BY_ID: (kundliId: string) => `/api/v1/kundli/${kundliId}`,
+    GET_REPORT: (kundliId: string) => `/api/v1/kundli/${kundliId}/report`,
+    UPDATE: (kundliId: string) => `/api/v1/kundli/${kundliId}`,
+    DELETE: (kundliId: string) => `/api/v1/kundli/${kundliId}`,
+  },
+
+  // Kundli Matching (Protected API)
+  MATCHING: {
+    GENERATE: '/api/v1/matching/generate',
+    LIST: '/api/v1/matching/list',
+    GET_BY_ID: (matchingId: string) => `/api/v1/matching/${matchingId}`,
+    GET_REPORT: (matchingId: string) => `/api/v1/matching/${matchingId}/report`,
+    DELETE: (matchingId: string) => `/api/v1/matching/${matchingId}`,
+  },
 };

@@ -3,7 +3,7 @@
  * Displays list of saved Kundli Matching reports
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -31,6 +31,7 @@ import { ShimmerEffect } from '../components/skeleton/ShimmerEffect';
 import { useResponsiveLayout } from '../src/utils/responsive';
 import { useSavedMatchings } from '../src/hooks/useKundliStorage';
 import { SavedMatching } from '../src/types/kundli';
+import { matchingService } from '../src/services/matching.service';
 
 // Get initials from name
 const getInitials = (name: string): string => {
@@ -185,7 +186,7 @@ const EmptyState = ({ scale, onCreatePress }: { scale: number; onCreatePress: ()
 
 const KundliMatchingDashboardScreen = ({ navigation }: any) => {
   const { scale } = useResponsiveLayout();
-  const { matchings, loading, searchMatchings, refetch } = useSavedMatchings();
+  const { matchings: localMatchings, loading: localLoading, searchMatchings, refetch: refetchLocal } = useSavedMatchings();
   const insets = useSafeAreaInsets();
 
   // Status bar height for proper spacing
@@ -196,17 +197,68 @@ const KundliMatchingDashboardScreen = ({ navigation }: any) => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [apiMatchings, setApiMatchings] = useState<SavedMatching[]>([]);
+  const [apiLoading, setApiLoading] = useState(true);
 
+  // Combined loading state
+  const loading = localLoading || apiLoading;
+
+  // Fetch matchings from API
+  const fetchFromApi = useCallback(async () => {
+    try {
+      const { data } = await matchingService.list({ limit: 50 });
+      setApiMatchings(data);
+    } catch (error) {
+      console.warn('Failed to fetch matchings from API:', error);
+      // Keep using local data if API fails
+    } finally {
+      setApiLoading(false);
+    }
+  }, []);
+
+  // Fetch on mount
+  useEffect(() => {
+    fetchFromApi();
+  }, [fetchFromApi]);
+
+  // Merge API and local matchings, removing duplicates by id
+  const allMatchings = useMemo(() => {
+    const matchingMap = new Map<string, SavedMatching>();
+
+    // Add local matchings first
+    localMatchings.forEach(m => matchingMap.set(m.id, m));
+
+    // API matchings take priority (update existing or add new)
+    apiMatchings.forEach(m => matchingMap.set(m.id, m));
+
+    // Convert to array and sort by creation date (newest first)
+    return Array.from(matchingMap.values()).sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [localMatchings, apiMatchings]);
+
+  // Filtered matchings based on search
   const filteredMatchings = useMemo(() => {
-    return searchMatchings(searchQuery);
-  }, [searchMatchings, searchQuery]);
+    if (!searchQuery.trim()) return allMatchings;
+    const query = searchQuery.toLowerCase();
+    return allMatchings.filter(m =>
+      m.boy.name.toLowerCase().includes(query) ||
+      m.girl.name.toLowerCase().includes(query)
+    );
+  }, [allMatchings, searchQuery]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await refetch();
+    // Refresh both API and local data
+    await Promise.all([
+      fetchFromApi(),
+      refetchLocal(),
+    ]);
     setRefreshing(false);
-  }, [refetch]);
+  }, [fetchFromApi, refetchLocal]);
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -335,7 +387,7 @@ const KundliMatchingDashboardScreen = ({ navigation }: any) => {
         </View>
 
         {/* Create New Button */}
-        {!loading && (matchings.length > 0 || searchQuery) && (
+        {!loading && (allMatchings.length > 0 || searchQuery) && (
           <Animated.View
             entering={FadeInDown.delay(400).duration(400)}
             style={[styles.createButtonContainer, { paddingHorizontal: 20 * scale }]}

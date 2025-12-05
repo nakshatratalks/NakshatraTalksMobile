@@ -24,7 +24,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { AppDataProvider } from './src/contexts/AppDataContext';
-import { ConfirmationModalProvider } from './src/utils/notificationService';
+import { ConfirmationModalProvider, ActionSheetProvider } from './src/utils/notificationService';
 
 // Prevent auto-hide of splash screen
 SplashScreen.preventAutoHideAsync();
@@ -305,11 +305,13 @@ export default function App() {
           <AppDataProvider>
             <NotifierWrapper>
               <ConfirmationModalProvider>
-                {showSplash ? (
-                  <AnimatedSplashScreen onAnimationComplete={handleSplashComplete} />
-                ) : (
-                  <Navigation />
-                )}
+                <ActionSheetProvider>
+                  {showSplash ? (
+                    <AnimatedSplashScreen onAnimationComplete={handleSplashComplete} />
+                  ) : (
+                    <Navigation />
+                  )}
+                </ActionSheetProvider>
               </ConfirmationModalProvider>
             </NotifierWrapper>
           </AppDataProvider>

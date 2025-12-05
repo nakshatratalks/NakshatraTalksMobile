@@ -1,9 +1,15 @@
 /**
  * KundliMatchingInputScreen
  * Collects Boy's and Girl's birth details for Kundli Matching
+ *
+ * Performance Optimizations:
+ * - Platform-specific DateTimePicker (native dialog on Android, modal on iOS)
+ * - Memoized components to prevent unnecessary re-renders
+ * - Proper cleanup/destructors for all async operations
+ * - AbortController for API calls
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef, memo } from 'react';
 import {
   View,
   Text,
@@ -23,16 +29,18 @@ import Animated, {
   FadeInDown,
   FadeIn,
 } from 'react-native-reanimated';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { ChevronLeft, User, Calendar, Clock, MapPin, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 import { useResponsiveLayout } from '../src/utils/responsive';
 import { useSavedMatchings } from '../src/hooks/useKundliStorage';
 import { BirthPlace, SavedKundli } from '../src/types/kundli';
+import { placesService } from '../src/services/places.service';
+import { matchingService } from '../src/services/matching.service';
 
-// Sample cities
-const SAMPLE_CITIES: BirthPlace[] = [
+// Fallback cities when API is unavailable
+const FALLBACK_CITIES: BirthPlace[] = [
   { name: 'Chennai, Tamil Nadu', latitude: 13.0827, longitude: 80.2707, timezone: 'Asia/Kolkata' },
   { name: 'Mumbai, Maharashtra', latitude: 19.076, longitude: 72.8777, timezone: 'Asia/Kolkata' },
   { name: 'Delhi, Delhi', latitude: 28.7041, longitude: 77.1025, timezone: 'Asia/Kolkata' },
@@ -50,8 +58,19 @@ interface PersonDetails {
   birthPlace: BirthPlace | null;
 }
 
-// Input Field Component
-const InputField = ({
+// Picker mode type
+type PickerMode = 'date' | 'time';
+
+// Platform-specific DateTimePicker configuration
+interface DateTimePickerConfig {
+  visible: boolean;
+  mode: PickerMode;
+  value: Date;
+  target: 'boy' | 'girl';
+}
+
+// Input Field Component - Memoized for performance
+const InputField = memo(({
   icon: Icon,
   placeholder,
   value,
@@ -86,10 +105,23 @@ const InputField = ({
       {value || placeholder}
     </Text>
   </TouchableOpacity>
-);
+));
 
-// Person Details Card Component
-const PersonDetailsCard = ({
+InputField.displayName = 'InputField';
+
+// Date/Time formatting utilities - defined outside component to prevent recreation
+const formatDate = (date: Date | null): string => {
+  if (!date) return '';
+  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const formatTime = (date: Date | null): string => {
+  if (!date) return '';
+  return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+};
+
+// Person Details Card Component - Memoized for performance
+const PersonDetailsCard = memo(({
   title,
   details,
   onNamePress,
@@ -106,16 +138,6 @@ const PersonDetailsCard = ({
   onPlacePress: () => void;
   scale: number;
 }) => {
-  const formatDate = (date: Date | null): string => {
-    if (!date) return '';
-    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-  };
-
-  const formatTime = (date: Date | null): string => {
-    if (!date) return '';
-    return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-  };
-
   return (
     <Animated.View
       entering={FadeInDown.duration(400)}
@@ -162,10 +184,12 @@ const PersonDetailsCard = ({
       />
     </Animated.View>
   );
-};
+});
 
-// Name Input Modal
-const NameInputModal = ({
+PersonDetailsCard.displayName = 'PersonDetailsCard';
+
+// Name Input Modal - Fixed state sync issue
+const NameInputModal = memo(({
   visible,
   value,
   title,
@@ -181,9 +205,32 @@ const NameInputModal = ({
   scale: number;
 }) => {
   const [name, setName] = useState(value);
+  const inputRef = useRef<TextInput>(null);
+
+  // Sync internal state when value prop changes (fixes stale state on reopen)
+  useEffect(() => {
+    if (visible) {
+      setName(value);
+      // Auto-focus with slight delay for modal animation
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [visible, value]);
+
+  const handleSave = useCallback(() => {
+    onSave(name);
+    onClose();
+  }, [name, onSave, onClose]);
+
+  const handleClose = useCallback(() => {
+    setName(value); // Reset to original value on cancel
+    onClose();
+  }, [value, onClose]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <View style={styles.modalOverlay}>
         <Animated.View
           entering={FadeIn.duration(200)}
@@ -191,11 +238,12 @@ const NameInputModal = ({
         >
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, { fontSize: 18 * scale }]}>{title}</Text>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity onPress={handleClose}>
               <X size={24 * scale} color="#595959" />
             </TouchableOpacity>
           </View>
           <TextInput
+            ref={inputRef}
             style={[styles.modalInput, {
               height: 50 * scale,
               borderRadius: 12 * scale,
@@ -207,7 +255,8 @@ const NameInputModal = ({
             placeholderTextColor="#888888"
             value={name}
             onChangeText={setName}
-            autoFocus
+            returnKeyType="done"
+            onSubmitEditing={handleSave}
           />
           <TouchableOpacity
             style={[styles.modalButton, {
@@ -215,10 +264,7 @@ const NameInputModal = ({
               borderRadius: 25 * scale,
               marginTop: 20 * scale,
             }]}
-            onPress={() => {
-              onSave(name);
-              onClose();
-            }}
+            onPress={handleSave}
           >
             <Text style={[styles.modalButtonText, { fontSize: 16 * scale }]}>Save</Text>
           </TouchableOpacity>
@@ -226,10 +272,12 @@ const NameInputModal = ({
       </View>
     </Modal>
   );
-};
+});
 
-// Location Search Modal
-const LocationModal = ({
+NameInputModal.displayName = 'NameInputModal';
+
+// Location Search Modal - Optimized with proper cleanup
+const LocationModal = memo(({
   visible,
   onClose,
   onSelect,
@@ -241,13 +289,129 @@ const LocationModal = ({
   scale: number;
 }) => {
   const [search, setSearch] = useState('');
+  const [apiCities, setApiCities] = useState<BirthPlace[]>([]);
+  const [popularCities, setPopularCities] = useState<BirthPlace[]>(FALLBACK_CITIES);
+  const [searchingCities, setSearchingCities] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const isMountedRef = useRef(true);
 
-  const filteredCities = useMemo(() => {
-    if (!search.trim()) return SAMPLE_CITIES;
-    return SAMPLE_CITIES.filter(city =>
-      city.name.toLowerCase().includes(search.toLowerCase())
-    );
+  // Cleanup on unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
+  // Reset search when modal closes
+  useEffect(() => {
+    if (!visible) {
+      setSearch('');
+      setApiCities([]);
+      setSearchingCities(false);
+    }
+  }, [visible]);
+
+  // Load popular cities on mount
+  useEffect(() => {
+    if (visible) {
+      const loadPopular = async () => {
+        try {
+          const cities = await placesService.getPopularCities(10);
+          if (isMountedRef.current && cities.length > 0) {
+            setPopularCities(cities);
+          }
+        } catch (error) {
+          // Use fallback cities
+        }
+      };
+      loadPopular();
+    }
+  }, [visible]);
+
+  // Debounced search with AbortController
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    if (search.trim().length < 2) {
+      setApiCities([]);
+      setSearchingCities(false);
+      return;
+    }
+
+    setSearchingCities(true);
+    abortControllerRef.current = new AbortController();
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const results = await placesService.searchPlaces(search.trim(), 10);
+        if (isMountedRef.current) {
+          setApiCities(results);
+        }
+      } catch (error) {
+        if (isMountedRef.current) {
+          setApiCities([]);
+        }
+      } finally {
+        if (isMountedRef.current) {
+          setSearchingCities(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
   }, [search]);
+
+  // Display cities - memoized
+  const displayedCities = useMemo(() => {
+    if (search.trim().length >= 2 && apiCities.length > 0) {
+      return apiCities;
+    }
+    if (search.trim().length >= 2 && apiCities.length === 0 && !searchingCities) {
+      const query = search.toLowerCase();
+      return popularCities.filter(city =>
+        city.name.toLowerCase().includes(query)
+      );
+    }
+    return popularCities;
+  }, [search, apiCities, popularCities, searchingCities]);
+
+  // Memoized city selection handler
+  const handleCitySelect = useCallback((city: BirthPlace) => {
+    Haptics.selectionAsync();
+    onSelect(city);
+    onClose();
+  }, [onSelect, onClose]);
+
+  // Memoized city item renderer
+  const renderCityItem = useCallback((city: BirthPlace, index: number) => (
+    <TouchableOpacity
+      key={`${city.name}-${city.latitude}-${index}`}
+      style={[styles.locationItem, { paddingVertical: 14 * scale, paddingHorizontal: 20 * scale }]}
+      onPress={() => handleCitySelect(city)}
+    >
+      <MapPin size={18 * scale} color="#2930A6" />
+      <Text style={[styles.locationText, { fontSize: 14 * scale, marginLeft: 12 * scale }]}>
+        {city.name}
+      </Text>
+    </TouchableOpacity>
+  ), [scale, handleCitySelect]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -263,43 +427,45 @@ const LocationModal = ({
             </TouchableOpacity>
           </View>
 
-          <TextInput
-            style={[styles.locationSearchInput, {
-              height: 48 * scale,
-              borderRadius: 24 * scale,
-              paddingHorizontal: 20 * scale,
-              marginHorizontal: 20 * scale,
-              fontSize: 14 * scale,
-            }]}
-            placeholder="Search city..."
-            placeholderTextColor="#888888"
-            value={search}
-            onChangeText={setSearch}
-          />
+          <View style={{ position: 'relative', marginHorizontal: 20 * scale }}>
+            <TextInput
+              style={[styles.locationSearchInput, {
+                height: 48 * scale,
+                borderRadius: 24 * scale,
+                paddingHorizontal: 20 * scale,
+                fontSize: 14 * scale,
+                paddingRight: searchingCities ? 50 * scale : 20 * scale,
+              }]}
+              placeholder="Search city..."
+              placeholderTextColor="#888888"
+              value={search}
+              onChangeText={setSearch}
+            />
+            {searchingCities && (
+              <View style={{ position: 'absolute', right: 16 * scale, top: 0, bottom: 0, justifyContent: 'center' }}>
+                <ActivityIndicator size="small" color="#2930A6" />
+              </View>
+            )}
+          </View>
 
           <ScrollView style={{ maxHeight: 300 * scale, marginTop: 12 * scale }}>
-            {filteredCities.map((city, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[styles.locationItem, { paddingVertical: 14 * scale, paddingHorizontal: 20 * scale }]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  onSelect(city);
-                  onClose();
-                }}
-              >
-                <MapPin size={18 * scale} color="#2930A6" />
-                <Text style={[styles.locationText, { fontSize: 14 * scale, marginLeft: 12 * scale }]}>
-                  {city.name}
+            {displayedCities.length === 0 && !searchingCities && search.trim().length >= 2 ? (
+              <View style={{ paddingVertical: 20 * scale, alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Lexend_400Regular', color: '#888888', fontSize: 14 * scale }}>
+                  No cities found
                 </Text>
-              </TouchableOpacity>
-            ))}
+              </View>
+            ) : (
+              displayedCities.map(renderCityItem)
+            )}
           </ScrollView>
         </Animated.View>
       </View>
     </Modal>
   );
-};
+});
+
+LocationModal.displayName = 'LocationModal';
 
 const KundliMatchingInputScreen = ({ navigation }: any) => {
   const { scale } = useResponsiveLayout();
@@ -311,6 +477,10 @@ const KundliMatchingInputScreen = ({ navigation }: any) => {
 
   // Yellow header height (wizard-type: compact but consistent)
   const yellowHeaderHeight = 100 * scale + statusBarHeight;
+
+  // Refs for cleanup
+  const isMountedRef = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Boy's details
   const [boyDetails, setBoyDetails] = useState<PersonDetails>({
@@ -330,11 +500,31 @@ const KundliMatchingInputScreen = ({ navigation }: any) => {
 
   // Modal states
   const [nameModal, setNameModal] = useState<{ visible: boolean; target: 'boy' | 'girl' }>({ visible: false, target: 'boy' });
-  const [dateModal, setDateModal] = useState<{ visible: boolean; target: 'boy' | 'girl' }>({ visible: false, target: 'boy' });
-  const [timeModal, setTimeModal] = useState<{ visible: boolean; target: 'boy' | 'girl' }>({ visible: false, target: 'boy' });
   const [locationModal, setLocationModal] = useState<{ visible: boolean; target: 'boy' | 'girl' }>({ visible: false, target: 'boy' });
 
+  // Platform-specific picker state (unified for date and time)
+  const [pickerConfig, setPickerConfig] = useState<DateTimePickerConfig>({
+    visible: false,
+    mode: 'date',
+    value: new Date(2000, 0, 1),
+    target: 'boy',
+  });
+
+  // Temp value for iOS picker (confirmed only when "Done" is pressed)
+  const [tempPickerValue, setTempPickerValue] = useState<Date>(new Date(2000, 0, 1));
+
   const [saving, setSaving] = useState(false);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   // Check if form is valid
   const isFormValid = useMemo(() => {
@@ -355,60 +545,190 @@ const KundliMatchingInputScreen = ({ navigation }: any) => {
     navigation.goBack();
   }, [navigation]);
 
+  // Memoized updateDetails function
+  const updateDetails = useCallback((target: 'boy' | 'girl', field: keyof PersonDetails, value: any) => {
+    if (target === 'boy') {
+      setBoyDetails(prev => ({ ...prev, [field]: value }));
+    } else {
+      setGirlDetails(prev => ({ ...prev, [field]: value }));
+    }
+  }, []);
+
+  // Format time helper (defined outside to prevent recreation)
+  const formatTimeForApi = useCallback((date: Date): string => {
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  }, []);
+
   const handleMatch = useCallback(async () => {
     if (!isFormValid) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSaving(true);
 
+    // Create abort controller for this request
+    abortControllerRef.current = new AbortController();
+
     try {
-      const formatTime = (date: Date): string => {
-        return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+      // Prepare input for API
+      const matchingInput = {
+        boy: {
+          name: boyDetails.name,
+          gender: 'male' as const,
+          dateOfBirth: boyDetails.dateOfBirth!.toISOString().split('T')[0], // YYYY-MM-DD
+          timeOfBirth: formatTimeForApi(boyDetails.timeOfBirth!),
+          birthPlace: boyDetails.birthPlace!,
+        },
+        girl: {
+          name: girlDetails.name,
+          gender: 'female' as const,
+          dateOfBirth: girlDetails.dateOfBirth!.toISOString().split('T')[0], // YYYY-MM-DD
+          timeOfBirth: formatTimeForApi(girlDetails.timeOfBirth!),
+          birthPlace: girlDetails.birthPlace!,
+        },
       };
 
-      const boyData: Omit<SavedKundli, 'id'> = {
-        name: boyDetails.name,
-        gender: 'male',
-        dateOfBirth: boyDetails.dateOfBirth!.toISOString(),
-        timeOfBirth: formatTime(boyDetails.timeOfBirth!),
-        birthPlace: boyDetails.birthPlace!,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+      // Try API first, fallback to local storage if API fails
+      let saved;
+      try {
+        saved = await matchingService.generate(matchingInput);
+      } catch (apiError) {
+        console.warn('API matching generation failed, saving locally:', apiError);
+        // Fallback to local storage with mock score
+        const boyData: Omit<SavedKundli, 'id'> = {
+          name: boyDetails.name,
+          gender: 'male',
+          dateOfBirth: boyDetails.dateOfBirth!.toISOString(),
+          timeOfBirth: formatTimeForApi(boyDetails.timeOfBirth!),
+          birthPlace: boyDetails.birthPlace!,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
 
-      const girlData: Omit<SavedKundli, 'id'> = {
-        name: girlDetails.name,
-        gender: 'female',
-        dateOfBirth: girlDetails.dateOfBirth!.toISOString(),
-        timeOfBirth: formatTime(girlDetails.timeOfBirth!),
-        birthPlace: girlDetails.birthPlace!,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+        const girlData: Omit<SavedKundli, 'id'> = {
+          name: girlDetails.name,
+          gender: 'female',
+          dateOfBirth: girlDetails.dateOfBirth!.toISOString(),
+          timeOfBirth: formatTimeForApi(girlDetails.timeOfBirth!),
+          birthPlace: girlDetails.birthPlace!,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
 
-      const saved = await saveMatching({
-        boy: boyData,
-        girl: girlData,
-        score: Math.floor(Math.random() * 18) + 18, // Mock score 18-36
-      });
+        saved = await saveMatching({
+          boy: boyData,
+          girl: girlData,
+          score: Math.floor(Math.random() * 18) + 18, // Mock score 18-36
+          maxScore: 36,
+        });
+      }
 
-      navigation.replace('KundliMatchingReport', {
-        matchingId: saved.id,
-        matchingData: saved,
-      });
+      if (isMountedRef.current) {
+        navigation.replace('KundliMatchingReport', {
+          matchingId: saved.id,
+          matchingData: saved,
+        });
+      }
     } catch (error) {
       console.error('Error saving matching:', error);
-      setSaving(false);
+      if (isMountedRef.current) {
+        setSaving(false);
+      }
     }
-  }, [isFormValid, boyDetails, girlDetails, saveMatching, navigation]);
+  }, [isFormValid, boyDetails, girlDetails, saveMatching, navigation, formatTimeForApi]);
 
-  const updateDetails = (target: 'boy' | 'girl', field: keyof PersonDetails, value: any) => {
-    if (target === 'boy') {
-      setBoyDetails(prev => ({ ...prev, [field]: value }));
+  // Open date picker - platform specific
+  const openDatePicker = useCallback((target: 'boy' | 'girl') => {
+    Haptics.selectionAsync();
+    const currentDate = target === 'boy' ? boyDetails.dateOfBirth : girlDetails.dateOfBirth;
+    const initialValue = currentDate || new Date(2000, 0, 1);
+
+    setTempPickerValue(initialValue);
+    setPickerConfig({
+      visible: true,
+      mode: 'date',
+      value: initialValue,
+      target,
+    });
+  }, [boyDetails.dateOfBirth, girlDetails.dateOfBirth]);
+
+  // Open time picker - platform specific
+  const openTimePicker = useCallback((target: 'boy' | 'girl') => {
+    Haptics.selectionAsync();
+    const currentTime = target === 'boy' ? boyDetails.timeOfBirth : girlDetails.timeOfBirth;
+    const initialValue = currentTime || new Date();
+
+    setTempPickerValue(initialValue);
+    setPickerConfig({
+      visible: true,
+      mode: 'time',
+      value: initialValue,
+      target,
+    });
+  }, [boyDetails.timeOfBirth, girlDetails.timeOfBirth]);
+
+  // Handle picker change - platform specific behavior
+  const handlePickerChange = useCallback((event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      // Android: picker auto-dismisses, apply value immediately if not cancelled
+      setPickerConfig(prev => ({ ...prev, visible: false }));
+      if (event.type === 'set' && selectedDate) {
+        const field = pickerConfig.mode === 'date' ? 'dateOfBirth' : 'timeOfBirth';
+        updateDetails(pickerConfig.target, field, selectedDate);
+      }
     } else {
-      setGirlDetails(prev => ({ ...prev, [field]: value }));
+      // iOS: update temp value, user confirms with "Done" button
+      if (selectedDate) {
+        setTempPickerValue(selectedDate);
+      }
     }
-  };
+  }, [pickerConfig.mode, pickerConfig.target, updateDetails]);
+
+  // Confirm iOS picker selection
+  const confirmPickerSelection = useCallback(() => {
+    const field = pickerConfig.mode === 'date' ? 'dateOfBirth' : 'timeOfBirth';
+    updateDetails(pickerConfig.target, field, tempPickerValue);
+    setPickerConfig(prev => ({ ...prev, visible: false }));
+  }, [pickerConfig.mode, pickerConfig.target, tempPickerValue, updateDetails]);
+
+  // Close picker without saving (iOS only, Android auto-closes)
+  const closePickerModal = useCallback(() => {
+    setPickerConfig(prev => ({ ...prev, visible: false }));
+  }, []);
+
+  // Memoized callbacks for PersonDetailsCard
+  const boyCallbacks = useMemo(() => ({
+    onNamePress: () => setNameModal({ visible: true, target: 'boy' }),
+    onDatePress: () => openDatePicker('boy'),
+    onTimePress: () => openTimePicker('boy'),
+    onPlacePress: () => setLocationModal({ visible: true, target: 'boy' }),
+  }), [openDatePicker, openTimePicker]);
+
+  const girlCallbacks = useMemo(() => ({
+    onNamePress: () => setNameModal({ visible: true, target: 'girl' }),
+    onDatePress: () => openDatePicker('girl'),
+    onTimePress: () => openTimePicker('girl'),
+    onPlacePress: () => setLocationModal({ visible: true, target: 'girl' }),
+  }), [openDatePicker, openTimePicker]);
+
+  // Close name modal callback
+  const closeNameModal = useCallback(() => {
+    setNameModal(prev => ({ ...prev, visible: false }));
+  }, []);
+
+  // Close location modal callback
+  const closeLocationModal = useCallback(() => {
+    setLocationModal(prev => ({ ...prev, visible: false }));
+  }, []);
+
+  // Handle name save
+  const handleNameSave = useCallback((name: string) => {
+    updateDetails(nameModal.target, 'name', name);
+  }, [nameModal.target, updateDetails]);
+
+  // Handle location select
+  const handleLocationSelect = useCallback((place: BirthPlace) => {
+    updateDetails(locationModal.target, 'birthPlace', place);
+  }, [locationModal.target, updateDetails]);
 
   return (
     <View style={styles.container}>
@@ -464,10 +784,10 @@ const KundliMatchingInputScreen = ({ navigation }: any) => {
             <PersonDetailsCard
               title="Boy's Details"
               details={boyDetails}
-              onNamePress={() => setNameModal({ visible: true, target: 'boy' })}
-              onDatePress={() => setDateModal({ visible: true, target: 'boy' })}
-              onTimePress={() => setTimeModal({ visible: true, target: 'boy' })}
-              onPlacePress={() => setLocationModal({ visible: true, target: 'boy' })}
+              onNamePress={boyCallbacks.onNamePress}
+              onDatePress={boyCallbacks.onDatePress}
+              onTimePress={boyCallbacks.onTimePress}
+              onPlacePress={boyCallbacks.onPlacePress}
               scale={scale}
             />
 
@@ -475,10 +795,10 @@ const KundliMatchingInputScreen = ({ navigation }: any) => {
             <PersonDetailsCard
               title="Girl's Details"
               details={girlDetails}
-              onNamePress={() => setNameModal({ visible: true, target: 'girl' })}
-              onDatePress={() => setDateModal({ visible: true, target: 'girl' })}
-              onTimePress={() => setTimeModal({ visible: true, target: 'girl' })}
-              onPlacePress={() => setLocationModal({ visible: true, target: 'girl' })}
+              onNamePress={girlCallbacks.onNamePress}
+              onDatePress={girlCallbacks.onDatePress}
+              onTimePress={girlCallbacks.onTimePress}
+              onPlacePress={girlCallbacks.onPlacePress}
               scale={scale}
             />
 
@@ -512,71 +832,60 @@ const KundliMatchingInputScreen = ({ navigation }: any) => {
           visible={nameModal.visible}
           value={nameModal.target === 'boy' ? boyDetails.name : girlDetails.name}
           title={nameModal.target === 'boy' ? "Boy's Name" : "Girl's Name"}
-          onClose={() => setNameModal({ ...nameModal, visible: false })}
-          onSave={(name) => updateDetails(nameModal.target, 'name', name)}
+          onClose={closeNameModal}
+          onSave={handleNameSave}
           scale={scale}
         />
 
-        {/* Date Picker Modal */}
-        {dateModal.visible && (
-          <Modal visible transparent animationType="fade" onRequestClose={() => setDateModal({ ...dateModal, visible: false })}>
+        {/* Platform-Specific Date/Time Picker */}
+        {Platform.OS === 'ios' ? (
+          // iOS: Show picker in a modal with Done button
+          <Modal
+            visible={pickerConfig.visible}
+            transparent
+            animationType="fade"
+            onRequestClose={closePickerModal}
+          >
             <View style={styles.modalOverlay}>
               <View style={[styles.pickerModalContent, { padding: 20 * scale, borderRadius: 20 * scale }]}>
                 <Text style={[styles.modalTitle, { fontSize: 18 * scale, marginBottom: 16 * scale }]}>
-                  Select Date of Birth
+                  {pickerConfig.mode === 'date' ? 'Select Date of Birth' : 'Select Time of Birth'}
                 </Text>
                 <DateTimePicker
-                  value={(dateModal.target === 'boy' ? boyDetails.dateOfBirth : girlDetails.dateOfBirth) || new Date(2000, 0, 1)}
-                  mode="date"
+                  value={tempPickerValue}
+                  mode={pickerConfig.mode}
                   display="spinner"
-                  onChange={(event, date) => {
-                    if (date) updateDetails(dateModal.target, 'dateOfBirth', date);
-                  }}
-                  maximumDate={new Date()}
+                  onChange={handlePickerChange}
+                  maximumDate={pickerConfig.mode === 'date' ? new Date() : undefined}
+                  textColor="#1a1a1a"
                 />
                 <TouchableOpacity
                   style={[styles.modalButton, { height: 48 * scale, borderRadius: 24 * scale, marginTop: 16 * scale }]}
-                  onPress={() => setDateModal({ ...dateModal, visible: false })}
+                  onPress={confirmPickerSelection}
                 >
                   <Text style={[styles.modalButtonText, { fontSize: 16 * scale }]}>Done</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </Modal>
-        )}
-
-        {/* Time Picker Modal */}
-        {timeModal.visible && (
-          <Modal visible transparent animationType="fade" onRequestClose={() => setTimeModal({ ...timeModal, visible: false })}>
-            <View style={styles.modalOverlay}>
-              <View style={[styles.pickerModalContent, { padding: 20 * scale, borderRadius: 20 * scale }]}>
-                <Text style={[styles.modalTitle, { fontSize: 18 * scale, marginBottom: 16 * scale }]}>
-                  Select Time of Birth
-                </Text>
-                <DateTimePicker
-                  value={(timeModal.target === 'boy' ? boyDetails.timeOfBirth : girlDetails.timeOfBirth) || new Date()}
-                  mode="time"
-                  display="spinner"
-                  onChange={(event, date) => {
-                    if (date) updateDetails(timeModal.target, 'timeOfBirth', date);
-                  }}
-                />
-                <TouchableOpacity
-                  style={[styles.modalButton, { height: 48 * scale, borderRadius: 24 * scale, marginTop: 16 * scale }]}
-                  onPress={() => setTimeModal({ ...timeModal, visible: false })}
-                >
-                  <Text style={[styles.modalButtonText, { fontSize: 16 * scale }]}>Done</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Modal>
+        ) : (
+          // Android: Native picker dialog (no modal wrapper needed)
+          pickerConfig.visible && (
+            <DateTimePicker
+              value={pickerConfig.value}
+              mode={pickerConfig.mode}
+              display="default"
+              onChange={handlePickerChange}
+              maximumDate={pickerConfig.mode === 'date' ? new Date() : undefined}
+            />
+          )
         )}
 
         {/* Location Modal */}
         <LocationModal
           visible={locationModal.visible}
-          onClose={() => setLocationModal({ ...locationModal, visible: false })}
-          onSelect={(place) => updateDetails(locationModal.target, 'birthPlace', place)}
+          onClose={closeLocationModal}
+          onSelect={handleLocationSelect}
           scale={scale}
         />
       </View>

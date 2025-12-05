@@ -60,6 +60,8 @@ import {
   ActiveChangeEvent,
   SelectionChangeReason,
 } from '../components/horoscope/constants/carouselConfig';
+import { horoscopeService } from '../src/services/horoscope.service';
+import { DailyHoroscope, ZodiacSignId } from '../src/types/horoscope';
 
 // Storage key for user's zodiac preference
 const ZODIAC_PREF_KEY = '@horoscope_selected_zodiac';
@@ -67,8 +69,9 @@ const ZODIAC_PREF_KEY = '@horoscope_selected_zodiac';
 // Horoscope categories for FlatList
 const CATEGORIES = ['general', 'love', 'career', 'health'] as const;
 
-// Mock horoscope data (will be replaced with API)
-const getMockHoroscope = (sign: string, _day: HoroscopeDay) => {
+
+// Fallback mock data for when API fails
+const getFallbackHoroscope = (sign: string) => {
   return {
     general: `The sun in ${sign} brings intense focus, while passionate energy drives determination. Endurance helps navigate challenges without giving up. Moon enhances emotional depth and focus, encouraging deep reflection. Venus fosters warmth with loved ones, making moments of affection and appreciation central to the day.`,
     love: `Your passion is ignited as celestial energies urge you to dive deep into fervent interests. The Moon enhances your focus, allowing you to enjoy deep expression with your partner. Be aware of any indecision that may arise in your relationship. Tune into your lover's needs and desires to maintain harmony and balance in your connection.`,
@@ -165,19 +168,35 @@ const DailyHoroscopeScreen = ({ navigation }: any) => {
     loadZodiacPreference();
   }, [user?.dateOfBirth]);
 
-  // Fetch horoscope data
+  // Fetch horoscope data from API
   const fetchHoroscope = useCallback(async () => {
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      const data = getMockHoroscope(selectedSign.name, activeDay);
+      // Call the real API
+      const signId = selectedSign.id as ZodiacSignId;
+      const response = await horoscopeService.getDailyHoroscope(signId);
+
+      // Get fallback data in case any field is missing
+      const fallback = getFallbackHoroscope(selectedSign.name);
+
+      // Map API response to UI format - API provides all categories
+      const data: Record<string, string> = {
+        general: response.horoscope?.general || fallback.general,
+        love: response.horoscope?.love || fallback.love,
+        career: response.horoscope?.career || fallback.career,
+        health: response.horoscope?.health || fallback.health,
+      };
+
       setHoroscopeData(data);
     } catch (error) {
-      console.error('Error fetching horoscope:', error);
+      console.error('Error fetching horoscope from API:', error);
+      // Use fallback data if API fails
+      const fallbackData = getFallbackHoroscope(selectedSign.name);
+      setHoroscopeData(fallbackData);
     } finally {
       setLoading(false);
     }
-  }, [selectedSign.id, activeDay]);
+  }, [selectedSign.id, selectedSign.name, activeDay]);
 
   // Fetch on mount and when sign/day changes
   useEffect(() => {

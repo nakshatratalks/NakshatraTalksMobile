@@ -44,7 +44,9 @@
       "Bash(dir:*)",
       "WebFetch(domain:api.prokerala.com)",
       "WebFetch(domain:www.prokerala.com)",
-      "Bash(node scripts/convert-images.js:*)"
+      "Bash(node scripts/convert-images.js:*)",
+      "WebFetch(domain:api.nakshatratalks.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": [],
     "ask": []

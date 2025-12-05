@@ -4,7 +4,7 @@
  * Steps: Name → Gender → DOB → Time → Location
  */
 
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -38,6 +38,8 @@ import { DateWheelPicker, TimeWheelPicker } from '../components/kundli/WheelPick
 import { useResponsiveLayout } from '../src/utils/responsive';
 import { useSavedKundlis } from '../src/hooks/useKundliStorage';
 import { KundliWizardData, KundliWizardStep, BirthPlace } from '../src/types/kundli';
+import { placesService } from '../src/services/places.service';
+import { kundliService } from '../src/services/kundli.service';
 
 // Wizard steps configuration
 const STEPS: KundliWizardStep[] = ['name', 'gender', 'dob', 'time', 'location'];
@@ -49,8 +51,8 @@ const GENDER_OPTIONS = [
   { value: 'other', label: 'Others' },
 ];
 
-// Sample cities for location (will be replaced with actual database)
-const SAMPLE_CITIES: BirthPlace[] = [
+// Fallback cities when API is unavailable
+const FALLBACK_CITIES: BirthPlace[] = [
   { name: 'Chennai, Tamil Nadu', latitude: 13.0827, longitude: 80.2707, timezone: 'Asia/Kolkata' },
   { name: 'Mumbai, Maharashtra', latitude: 19.076, longitude: 72.8777, timezone: 'Asia/Kolkata' },
   { name: 'Delhi, Delhi', latitude: 28.7041, longitude: 77.1025, timezone: 'Asia/Kolkata' },
@@ -90,6 +92,10 @@ const KundliGenerationScreen = ({ navigation }: any) => {
   const [showTimePicker, setShowTimePicker] = useState(Platform.OS === 'android' ? false : true);
   const [locationSearch, setLocationSearch] = useState('');
   const [saving, setSaving] = useState(false);
+  const [searchingCities, setSearchingCities] = useState(false);
+  const [citiesFromApi, setCitiesFromApi] = useState<BirthPlace[]>([]);
+  const [popularCities, setPopularCities] = useState<BirthPlace[]>(FALLBACK_CITIES);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Current step key
   const stepKey = STEPS[currentStep];
@@ -112,14 +118,74 @@ const KundliGenerationScreen = ({ navigation }: any) => {
     }
   }, [stepKey, formData]);
 
-  // Filtered cities based on search
-  const filteredCities = useMemo(() => {
-    if (!locationSearch.trim()) return SAMPLE_CITIES;
-    const query = locationSearch.toLowerCase();
-    return SAMPLE_CITIES.filter(city =>
-      city.name.toLowerCase().includes(query)
-    );
+  // Load popular cities when entering location step
+  useEffect(() => {
+    if (stepKey === 'location') {
+      const loadPopularCities = async () => {
+        try {
+          const cities = await placesService.getPopularCities(10);
+          if (cities.length > 0) {
+            setPopularCities(cities);
+          }
+        } catch (error) {
+          console.error('Error loading popular cities:', error);
+          // Keep using fallback cities
+        }
+      };
+      loadPopularCities();
+    }
+  }, [stepKey]);
+
+  // Debounced location search
+  useEffect(() => {
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Skip empty or short queries
+    if (locationSearch.trim().length < 2) {
+      setCitiesFromApi([]);
+      setSearchingCities(false);
+      return;
+    }
+
+    setSearchingCities(true);
+
+    // Debounce the search
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const results = await placesService.searchPlaces(locationSearch.trim(), 10);
+        setCitiesFromApi(results);
+      } catch (error) {
+        console.error('Error searching places:', error);
+        setCitiesFromApi([]);
+      } finally {
+        setSearchingCities(false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
   }, [locationSearch]);
+
+  // Display cities - search results if available, otherwise popular cities
+  const displayedCities = useMemo(() => {
+    if (locationSearch.trim().length >= 2 && citiesFromApi.length > 0) {
+      return citiesFromApi;
+    }
+    if (locationSearch.trim().length >= 2 && citiesFromApi.length === 0 && !searchingCities) {
+      // Search returned no results - filter popular cities as fallback
+      const query = locationSearch.toLowerCase();
+      return popularCities.filter(city =>
+        city.name.toLowerCase().includes(query)
+      );
+    }
+    return popularCities;
+  }, [locationSearch, citiesFromApi, popularCities, searchingCities]);
 
   // Handle back
   const handleBack = useCallback(() => {
@@ -139,20 +205,37 @@ const KundliGenerationScreen = ({ navigation }: any) => {
     if (currentStep < STEPS.length - 1) {
       setCurrentStep(currentStep + 1);
     } else {
-      // Final step - save and navigate to report
+      // Final step - generate kundli via API and navigate to report
       setSaving(true);
       try {
         const timeString = formData.timeOfBirth
           ? `${formData.timeOfBirth.getHours().toString().padStart(2, '0')}:${formData.timeOfBirth.getMinutes().toString().padStart(2, '0')}`
           : '12:00';
 
-        const savedKundli = await saveKundli({
+        // Prepare input for API
+        const kundliInput = {
           name: formData.name,
           gender: formData.gender!,
-          dateOfBirth: formData.dateOfBirth!.toISOString(),
+          dateOfBirth: formData.dateOfBirth!.toISOString().split('T')[0], // YYYY-MM-DD format
           timeOfBirth: timeString,
           birthPlace: formData.birthPlace!,
-        });
+        };
+
+        // Try API first, fallback to local storage if API fails
+        let savedKundli;
+        try {
+          savedKundli = await kundliService.generate(kundliInput);
+        } catch (apiError) {
+          console.warn('API generation failed, saving locally:', apiError);
+          // Fallback to local storage
+          savedKundli = await saveKundli({
+            name: formData.name,
+            gender: formData.gender!,
+            dateOfBirth: formData.dateOfBirth!.toISOString(),
+            timeOfBirth: timeString,
+            birthPlace: formData.birthPlace!,
+          });
+        }
 
         navigation.replace('KundliReport', {
           kundliId: savedKundli.id,
@@ -361,54 +444,69 @@ const KundliGenerationScreen = ({ navigation }: any) => {
             </Text>
 
             {/* Search Input */}
-            <TextInput
-              style={[styles.textInput, {
-                fontSize: 16 * scale,
-                height: 56 * scale,
-                borderRadius: 28 * scale,
-                paddingHorizontal: 24 * scale,
-                marginTop: 32 * scale,
-              }]}
-              placeholder="Search"
-              placeholderTextColor="#888888"
-              value={locationSearch}
-              onChangeText={setLocationSearch}
-            />
+            <View style={{ position: 'relative', marginTop: 32 * scale }}>
+              <TextInput
+                style={[styles.textInput, {
+                  fontSize: 16 * scale,
+                  height: 56 * scale,
+                  borderRadius: 28 * scale,
+                  paddingHorizontal: 24 * scale,
+                  paddingRight: searchingCities ? 50 * scale : 24 * scale,
+                }]}
+                placeholder="Search city or place"
+                placeholderTextColor="#888888"
+                value={locationSearch}
+                onChangeText={setLocationSearch}
+              />
+              {searchingCities && (
+                <View style={[styles.searchLoader, { right: 16 * scale }]}>
+                  <ActivityIndicator size="small" color="#2930A6" />
+                </View>
+              )}
+            </View>
 
             {/* City List */}
             <ScrollView
               style={[styles.cityList, { marginTop: 16 * scale, maxHeight: 250 * scale }]}
               showsVerticalScrollIndicator={false}
             >
-              {filteredCities.map((city, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[styles.cityItem, {
-                    paddingVertical: 14 * scale,
-                    paddingHorizontal: 16 * scale,
-                    borderRadius: 12 * scale,
-                    marginBottom: 8 * scale,
-                  },
-                    formData.birthPlace?.name === city.name && styles.cityItemSelected,
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setFormData({ ...formData, birthPlace: city });
-                    setLocationSearch(city.name);
-                  }}
-                >
-                  <Text style={[
-                    styles.cityText,
-                    { fontSize: 14 * scale },
-                    formData.birthPlace?.name === city.name && styles.cityTextSelected,
-                  ]}>
-                    {city.name}
+              {displayedCities.length === 0 && !searchingCities && locationSearch.trim().length >= 2 ? (
+                <View style={[styles.noCitiesContainer, { paddingVertical: 20 * scale }]}>
+                  <Text style={[styles.noCitiesText, { fontSize: 14 * scale }]}>
+                    No cities found. Try a different search.
                   </Text>
-                  {formData.birthPlace?.name === city.name && (
-                    <Check size={18 * scale} color="#2930A6" />
-                  )}
-                </TouchableOpacity>
-              ))}
+                </View>
+              ) : (
+                displayedCities.map((city, index) => (
+                  <TouchableOpacity
+                    key={`${city.name}-${city.latitude}-${index}`}
+                    style={[styles.cityItem, {
+                      paddingVertical: 14 * scale,
+                      paddingHorizontal: 16 * scale,
+                      borderRadius: 12 * scale,
+                      marginBottom: 8 * scale,
+                    },
+                      formData.birthPlace?.name === city.name && styles.cityItemSelected,
+                    ]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setFormData({ ...formData, birthPlace: city });
+                      setLocationSearch(city.name);
+                    }}
+                  >
+                    <Text style={[
+                      styles.cityText,
+                      { fontSize: 14 * scale },
+                      formData.birthPlace?.name === city.name && styles.cityTextSelected,
+                    ]}>
+                      {city.name}
+                    </Text>
+                    {formData.birthPlace?.name === city.name && (
+                      <Check size={18 * scale} color="#2930A6" />
+                    )}
+                  </TouchableOpacity>
+                ))
+              )}
             </ScrollView>
           </Animated.View>
         );
@@ -650,6 +748,21 @@ const styles = StyleSheet.create({
   cityTextSelected: {
     fontFamily: 'Lexend_500Medium',
     color: '#2930A6',
+  },
+  searchLoader: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+  },
+  noCitiesContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noCitiesText: {
+    fontFamily: 'Lexend_400Regular',
+    color: '#888888',
+    textAlign: 'center',
   },
   buttonContainer: {
     paddingTop: 16,
